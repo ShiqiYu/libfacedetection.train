@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>16--Award_Ceremony_16_Award_Ceremony_Awards_Ceremony_16_495.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>1429</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>385</xmin>
+<ymin>151</ymin>
+<xmax>594</xmax>
+<ymax>450</ymax>
+</bndbox>
+</object>
+</annotation>

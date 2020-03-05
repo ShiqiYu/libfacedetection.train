@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>55--Sports_Coach_Trainer_55_Sports_Coach_Trainer_sportcoaching_55_599.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>768</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>694</xmin>
+<ymin>658</ymin>
+<xmax>704</xmax>
+<ymax>671</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>739</xmin>
+<ymin>653</ymin>
+<xmax>750</xmax>
+<ymax>667</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+</annotation>

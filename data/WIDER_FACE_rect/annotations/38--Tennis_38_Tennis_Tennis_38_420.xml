@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>38--Tennis_38_Tennis_Tennis_38_420.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>684</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>638</xmin>
+<ymin>50</ymin>
+<xmax>690</xmax>
+<ymax>124</ymax>
+</bndbox>
+</object>
+</annotation>

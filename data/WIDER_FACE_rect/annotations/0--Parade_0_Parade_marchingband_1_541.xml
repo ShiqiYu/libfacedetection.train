@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>0--Parade_0_Parade_marchingband_1_541.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>609</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>927</xmin>
+<ymin>515</ymin>
+<xmax>938</xmax>
+<ymax>529</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>753</xmin>
+<ymin>585</ymin>
+<xmax>769</xmax>
+<ymax>602</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+</annotation>

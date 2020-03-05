@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>37--Soccer_37_Soccer_soccer_ball_37_741.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>1024</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>793</xmin>
+<ymin>661</ymin>
+<xmax>826</xmax>
+<ymax>710</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>602</xmin>
+<ymin>585</ymin>
+<xmax>634</xmax>
+<ymax>619</ymax>
+</bndbox>
+<has_lm>0</has_lm>
+</object>
+</annotation>

@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<annotation>
+<folder>widerface</folder>
+<filename>13--Interview_13_Interview_Interview_On_Location_13_510.jpg</filename>
+<source>
+<database>wider face Database</database>
+<annotation>PASCAL VOC2007</annotation>
+<image>flickr</image>
+<flickrid>-1</flickrid>
+</source>
+<owner>
+<flickrid>yanyu</flickrid>
+<name>yanyu</name>
+</owner>
+<size>
+<width>1024</width>
+<height>1389</height>
+<depth>3</depth>
+</size>
+<segmented>0</segmented>
+<object>
+<name>face</name>
+<pose>Unspecified</pose>
+<truncated>1</truncated>
+<difficult>0</difficult>
+<bndbox>
+<xmin>377</xmin>
+<ymin>84</ymin>
+<xmax>680</xmax>
+<ymax>509</ymax>
+</bndbox>
+</object>
+</annotation>
