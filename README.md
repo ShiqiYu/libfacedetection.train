@@ -2,15 +2,15 @@
 
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
-It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is inspired by [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch).
+It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch).
 
 
 ### Contents
 - [Installation](#installation)
 - [Training](#training)
 - [Detection](#detection)
-- [Export CPP source code](#export_cpp_source_code)
-- [Design your own model](#design_your_own_ model)
+- [Export CPP source code](#export-cpp-source-code)
+- [Design your own model](#design-your-own-model)
 
 ## Installation
 1. Install [PyTorch](https://pytorch.org/) >= v1.0.0 following official instruction.
@@ -28,7 +28,7 @@ _Note: Codes are based on Python 3+._
   $TRAIN_ROOT/data/WIDER_FACE_rect/images
   ```
   and create a symbol link to this directory from  
-    ```Shell
+  ```Shell
   $TRAIN_ROOT/data/WIDER_FACE_landmark/images
   ```
 2. Train the model using WIDER FACE:
@@ -44,11 +44,11 @@ cd $TRAIN_ROOT/tasks/task1/
 ```
 
 ## Export CPP source code
-The following bash code can export CPP for project [libfacedetection](https://github.com/ShiqiYu/libfacedetection)
+The following bash code can export a CPP file for project [libfacedetection](https://github.com/ShiqiYu/libfacedetection)
 ```Shell
 cd $TRAIN_ROOT/tasks/task1/
 ./exportcpp.py -m weights/yunet_final.pth -o output.cpp
 ```
 ## Design your own model
-You can copy $TRAIN_ROOT/tasks/task1/ to $TRAIN_ROOT/tasks/task2/ or other similar directory, and then change the model defination file: yufacedetectnet.py
+You can copy $TRAIN_ROOT/tasks/task1/ to $TRAIN_ROOT/tasks/task2/ or other similar directory, and then modify the model defined in file: tasks/task2/yufacedetectnet.py .
 
