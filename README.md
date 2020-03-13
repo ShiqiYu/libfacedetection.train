@@ -20,6 +20,11 @@ It is the training program for [libfacedetection](https://github.com/ShiqiYu/lib
 git clone https://github.com/ShiqiYu/libfacedetection.train
 ```
 
+3. Install dependencies.
+```shell
+pip install -r requirements.txt
+```
+
 _Note: Codes are based on Python 3+._
 
 ## Training
@@ -41,6 +46,46 @@ _Note: Codes are based on Python 3+._
 ```Shell
 cd $TRAIN_ROOT/tasks/task1/
 ./detect.py -m weights/yunet_final.pth --image_file=filename.jpg
+```
+
+## Evaluation on WIDER Face
+1. Enter the directory.
+```shell
+cd $TRAIN_ROOT/tasks/task1/
+```
+
+2. Create a symbolic link to WIDER Face. `$WIDERFACE` is the path to WIDER Face dataset, which contains `wider_face_split/`, `WIDER_val`, etc.
+```shell
+ln -s $WIDERFACE widerface
+```
+
+3. Perform evaluation. To reproduce the following performance, run on the default settings. Run `python test.py --help` for more options.
+```shell
+mkdir results
+python test.py
+```
+
+4. Download and run the [official evaluation tools](http://shuoyang1213.me/WIDERFACE/support/eval_script/eval_tools.zip). ***NOTE***: Matlab required!
+```shell
+# download
+wget http://shuoyang1213.me/WIDERFACE/support/eval_script/eval_tools.zip
+# extract
+unzip eval_tools.zip
+# run the offical evaluation script
+cd eval_tools
+vim wider_eval.m # modify line 10 and line 21 according to your case
+matlab -nodesktop -nosplash -r "run wider_eval.m;quit;"
+```
+
+### Performance on WIDER Face
+1. Run on default settings: scales=[1.], confidence_threshold=0.3:
+```
+AP_easy=0.830, AP_medium=0.793, AP_hard=0.572
+```
+
+2. Run on: scales=[1.], confidence_threshold=0:
+```
+AP_easy=0.835, AP_medium=0.805, AP_hard=0.619
 ```
 
 ## Export CPP source code
