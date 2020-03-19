@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='YuMobileNet Training')
 parser.add_argument('--training_face_rect_dir', default='../../data/WIDER_FACE_rect', help='Training dataset directory')
 parser.add_argument('--training_face_landmark_dir', default='../../data/WIDER_FACE_landmark', help='Training dataset directory')
 parser.add_argument('-b', '--batch_size', default=16, type=int, help='Batch size for training')
-parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--gpu_ids', default='0', help='the IDs of GPU')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -99,7 +99,7 @@ def train():
     dataset_rect = FaceRectLMDataset(training_face_rect_dir, img_dim, rgb_mean)
     dataset_landmark = FaceRectLMDataset(training_face_landmark_dir, img_dim, rgb_mean)
 
-    for epoch in range(max_epoch):
+    for epoch in range(args.resume_epoch, max_epoch):
         if epoch < 100 :
             with_landmark = False
         else:
@@ -122,11 +122,11 @@ def train():
         # the start time
         load_t0 = time.time()
 
-        for iteration in range(args.resume_epoch, epoch_size):
-            # create batch iterator
-            batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True,
-                                                  num_workers=num_workers, collate_fn=detection_collate))
-
+        # create batch iterator
+        batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True,
+                                              num_workers=num_workers, collate_fn=detection_collate))
+        # for each iteration in this epoch
+        for iteration in range(epoch_size):
 
             # load train data
             images, targets = next(batch_iterator)
