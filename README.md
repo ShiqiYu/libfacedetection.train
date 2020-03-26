@@ -77,15 +77,10 @@ vim wider_eval.m # modify line 10 and line 21 according to your case
 matlab -nodesktop -nosplash -r "run wider_eval.m;quit;"
 ```
 
-### Performance on WIDER Face
-1. Run on default settings: scales=[1.], confidence_threshold=0.3:
+### Performance on WIDER Face (Val)
+Run on default settings: scales=[1.], confidence_threshold=0.3:
 ```
-AP_easy=0.830, AP_medium=0.793, AP_hard=0.572
-```
-
-2. Run on: scales=[1.], confidence_threshold=0:
-```
-AP_easy=0.835, AP_medium=0.805, AP_hard=0.619
+AP_easy=0.849, AP_medium=0.816, AP_hard=0.601
 ```
 
 ## Export CPP source code
