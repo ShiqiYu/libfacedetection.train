@@ -32,7 +32,7 @@ parser.add_argument('--keep_top_k', default=750, type=int, help='keep_top_k')
 #parser.add_argument('-s', '--show_image', action="store_true", default=False, help='show detection results')
 parser.add_argument('--vis_thres', default=0.3, type=float, help='visualization_threshold')
 parser.add_argument('--base_layers', default=16, type=int, help='the number of the output of the first layer')
-parser.add_argument('--device', default='cuda:1', help='which device the program will run on. cuda:0, cuda:1, ...')
+parser.add_argument('--device', default='cuda:0', help='which device the program will run on. cuda:0, cuda:1, ...')
 args = parser.parse_args()
 
 def check_keys(model, pretrained_state_dict):
