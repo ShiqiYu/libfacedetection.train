@@ -26,7 +26,7 @@ parser.add_argument('-m', '--trained_model', default='weights/yunet_final.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('-d', '--image_dim', default=320,
                     type=int, help='Input image width')
-parser.add_argument('-o', '--output', default='facedetectcnn.onnx',
+parser.add_argument('-o', '--output', default='onnx/facedetectcnn.onnx',
                     type=str, help='The output ONNX file, trained parameters inside')
 args = parser.parse_args()
 
@@ -83,4 +83,4 @@ if __name__ == '__main__':
     img = torch.from_numpy(img).unsqueeze(0)
     img = img.to(torch.device('cpu'))
     torch.onnx.export(net, img, args.output)
-    print('Finished exporing model!')
+    print('Finished exporing model to ' + args.output)
