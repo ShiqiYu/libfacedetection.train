@@ -14,13 +14,18 @@ import datetime
 import math
 import numpy as np
 
+from config import cfg
+
 sys.path.append(os.getcwd() + '/../../src')
 
 from data import FaceRectLMDataset, detection_collate
 from multibox_loss import MultiBoxLoss
 from prior_box import PriorBox
-from config import cfg
 from yufacedetectnet import YuFaceDetectNet
+
+import resource
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (20000, rlimit[1]))
 
 parser = argparse.ArgumentParser(description='YuMobileNet Training')
 parser.add_argument('--training_face_rect_dir', default='../../data/WIDER_FACE_rect', help='Training dataset directory')
@@ -28,7 +33,7 @@ parser.add_argument('--training_face_landmark_dir', default='../../data/WIDER_FA
 parser.add_argument('-b', '--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--gpu_ids', default='0', help='the IDs of GPU')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-2, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--resume_net', default=None, help='resume net for retraining')
 parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')
@@ -44,10 +49,10 @@ rgb_mean =  (0,0,0) #(104, 117, 123) # bgr order
 num_classes = 2
 gpu_ids =  [int(item) for item in args.gpu_ids.split(',')]
 num_workers = args.num_workers
-batch_size = args.batch_size
+#batch_size = args.batch_size
 momentum = args.momentum
 weight_decay = args.weight_decay
-initial_lr = args.lr
+#initial_lr = args.lr
 gamma = args.gamma
 max_epoch = args.max_epoch
 training_face_rect_dir = args.training_face_rect_dir
@@ -80,7 +85,7 @@ device = torch.device('cuda:'+str(gpu_ids[0]))
 cudnn.benchmark = True
 net = net.to(device)
 
-optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
+optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=momentum, weight_decay=weight_decay)
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 3, 0.35, False, False)
 
 priorbox = PriorBox(cfg, image_size=(img_dim, img_dim))
@@ -98,6 +103,8 @@ def train():
     print('Loading Dataset...')
     dataset_rect = FaceRectLMDataset(training_face_rect_dir, img_dim, rgb_mean)
     dataset_landmark = FaceRectLMDataset(training_face_landmark_dir, img_dim, rgb_mean)
+    
+    batch_size = args.batch_size
 
     for epoch in range(args.resume_epoch, max_epoch):
         if epoch < 100 :
@@ -109,8 +116,11 @@ def train():
         if with_landmark:
             dataset = dataset_landmark
 
+        #if (epoch % 100 == 0 and epoch > 0) :
+        #    batch_size *= 2
+
         epoch_size = math.ceil(len(dataset) / batch_size)
-        lr = adjust_learning_rate_poly(optimizer, epoch, max_epoch)
+        lr = adjust_learning_rate_poly(optimizer, args.lr, epoch, max_epoch)
 
         #for computing average losses in the newest batch_iterator iterations
         #to make the loss to be smooth
@@ -167,11 +177,11 @@ def train():
             loss_epoch.append(loss.item())
             mean_loss = np.mean(loss_epoch)
 
-            if ( iteration % 10 == 0):
+            if ( iteration % 20 == 0 or iteration == epoch_size - 1):
                 print('LM:{} || Epoch:{}/{} || Epochiter: {}/{} || L: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(with_landmark, epoch, max_epoch, iteration, epoch_size, loss_l.item(), mean_l_loss, loss_lm.item(), mean_lm_loss, loss_c.item(), mean_c_loss, loss.item(), mean_loss, lr))
                 #print('time=', (time.time()-load_t0)/60)
 
-        if (epoch % 10 == 1 and epoch > 1) :
+        if (epoch % 50 == 0 and epoch > 0) :
             torch.save(net.state_dict(), args.weight_filename_prefix + '_epoch_' + str(epoch) + '.pth')
 
         #the end time
@@ -182,7 +192,7 @@ def train():
     torch.save(net.state_dict(), args.weight_filename_prefix + '_final.pth')
 
 
-def adjust_learning_rate_poly(optimizer, iteration, max_iter):
+def adjust_learning_rate_poly(optimizer, initial_lr, iteration, max_iter):
     """Sets the learning rate
     # Adapted from PyTorch Imagenet example:
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
@@ -190,6 +200,10 @@ def adjust_learning_rate_poly(optimizer, iteration, max_iter):
     lr = initial_lr * ( 1 - (iteration / max_iter)) * ( 1 - (iteration / max_iter))
     if ( lr < 1.0e-7 ):
       lr = 1.0e-7
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr;
+
     return lr
 
 
