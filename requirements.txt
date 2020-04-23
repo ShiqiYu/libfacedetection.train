@@ -1,0 +1,4 @@
+opencv-python
+#torch>=1.0.0
+scipy
+tqdm
