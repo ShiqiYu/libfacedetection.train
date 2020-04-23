@@ -116,14 +116,19 @@ def train():
         if with_landmark:
             dataset = dataset_landmark
 
-        #if (epoch % 100 == 0 and epoch > 0) :
-        #    batch_size *= 2
+        train_loader = data.DataLoader(
+            dataset=dataset,
+            batch_size=batch_size,
+            collate_fn=detection_collate,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=False,
+            drop_last=True,
+        )
 
-        epoch_size = math.ceil(len(dataset) / batch_size)
         lr = adjust_learning_rate_poly(optimizer, args.lr, epoch, max_epoch)
 
-        #for computing average losses in the newest batch_iterator iterations
-        #to make the loss to be smooth
+        #for computing average losses in this epoch
         loss_l_epoch = []
         loss_lm_epoch = []
         loss_c_epoch = []
@@ -132,54 +137,45 @@ def train():
         # the start time
         load_t0 = time.time()
 
-        # create batch iterator
-        batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True,
-                                              num_workers=num_workers, collate_fn=detection_collate))
         # for each iteration in this epoch
-        for iteration in range(epoch_size):
-
+        num_iter_in_epoch = len(train_loader)
+        for iter_idx, one_batch_data in enumerate(train_loader):
             # load train data
-            images, targets = next(batch_iterator)
+            #images, targets = next(batch_iterator)
+            images, targets = one_batch_data
             images = images.to(device)
             targets = [anno.to(device) for anno in targets]
 
             # forward
             out = net(images)
-
-            # backprop
-            optimizer.zero_grad()
+            # loss
             loss_l, loss_lm, loss_c = criterion(out, priors, targets)
 
-            loss = 0
             if with_landmark:
                 loss = loss_l + loss_lm + loss_c
             else:
                 loss = loss_l + loss_c
 
+            # backprop
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            if (len(loss_l_epoch) >= epoch_size ):
-                del loss_l_epoch[0]
-            if (len(loss_lm_epoch) >= epoch_size ):
-                del loss_lm_epoch[0]
-            if (len(loss_c_epoch) >= epoch_size ):
-                del loss_c_epoch[0]
-            if (len(loss_epoch) >= epoch_size ):
-                del loss_epoch[0]
-
+            # put losses to lists to average for printing
             loss_l_epoch.append(loss_l.item())
-            mean_l_loss = np.mean(loss_l_epoch)
             loss_lm_epoch.append(loss_lm.item())
-            mean_lm_loss = np.mean(loss_lm_epoch)
             loss_c_epoch.append(loss_c.item())
-            mean_c_loss = np.mean(loss_c_epoch)
             loss_epoch.append(loss.item())
-            mean_loss = np.mean(loss_epoch)
 
-            if ( iteration % 20 == 0 or iteration == epoch_size - 1):
-                print('LM:{} || Epoch:{}/{} || Epochiter: {}/{} || L: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(with_landmark, epoch, max_epoch, iteration, epoch_size, loss_l.item(), mean_l_loss, loss_lm.item(), mean_lm_loss, loss_c.item(), mean_c_loss, loss.item(), mean_loss, lr))
-                #print('time=', (time.time()-load_t0)/60)
+            # print loss
+            if ( iter_idx % 20 == 0 or iter_idx == num_iter_in_epoch - 1):
+                print('LM:{} || Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
+                    with_landmark, epoch, max_epoch, iter_idx, num_iter_in_epoch, 
+                    loss_l.item(), np.mean(loss_l_epoch), 
+                    loss_lm.item(), np.mean(loss_lm_epoch), 
+                    loss_c.item(), np.mean(loss_c_epoch), 
+                    loss.item(),  np.mean(loss_epoch), lr))
+
 
         if (epoch % 50 == 0 and epoch > 0) :
             torch.save(net.state_dict(), args.weight_filename_prefix + '_epoch_' + str(epoch) + '.pth')
