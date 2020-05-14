@@ -19,7 +19,6 @@ from utils import decode
 from timer import Timer
 from yufacedetectnet import YuFaceDetectNet
 
-
 parser = argparse.ArgumentParser(description='Face and Landmark Detection')
 
 parser.add_argument('-m', '--trained_model', default='weights/yunet_final.pth',
