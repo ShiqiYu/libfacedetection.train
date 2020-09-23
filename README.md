@@ -9,6 +9,7 @@ It is the training program for [libfacedetection](https://github.com/ShiqiYu/lib
 - [Installation](#installation)
 - [Training](#training)
 - [Detection](#detection)
+- [Evaluation on WIDER Face](#evaluation-on-wider-face)
 - [Export CPP source code](#export-cpp-source-code)
 - [Design your own model](#design-your-own-model)
 
@@ -89,6 +90,14 @@ The following bash code can export a CPP file for project [libfacedetection](htt
 cd $TRAIN_ROOT/tasks/task1/
 ./exportcpp.py -m weights/yunet_final.pth -o output.cpp
 ```
+
+## Export to onnx model
+Export to onnx model for [libfacedetection/example/opencv_dnn](https://github.com/ShiqiYu/libfacedetection/tree/master/example/opencv_dnn).
+```shell
+cd $TRAIN_ROOT/tasks/task1/
+python exportonnx.py -m weights/yunet_final.pth
+```
+
 ## Design your own model
 You can copy $TRAIN_ROOT/tasks/task1/ to $TRAIN_ROOT/tasks/task2/ or other similar directory, and then modify the model defined in file: tasks/task2/yufacedetectnet.py .
 
