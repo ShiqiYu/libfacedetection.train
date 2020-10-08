@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
-It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch).
+It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch). Visualization of the network architecture: [[netron]](https://lutzroeder.github.io/netron/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/tasks/task1/onnx/YuFaceDetectNet_320.onnx).
 
 
 ### Contents
@@ -11,6 +11,7 @@ It is the training program for [libfacedetection](https://github.com/ShiqiYu/lib
 - [Detection](#detection)
 - [Evaluation on WIDER Face](#evaluation-on-wider-face)
 - [Export CPP source code](#export-cpp-source-code)
+- [Export to ONNX model](#export-to-onnx-model)
 - [Design your own model](#design-your-own-model)
 
 ## Installation
