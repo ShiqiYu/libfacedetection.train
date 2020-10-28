@@ -73,7 +73,7 @@ class YuFaceDetectNet(nn.Module):
         self.model5 = Conv_3layers(128, 256, 128, 256, 1)
         self.model6 = Conv_3layers(256, 256, 256, 256, 1)
 
-        self.loc, self.conf = self.multibox(self.num_classes)
+        self.loc, self.conf, self.iou = self.multibox(self.num_classes)
 
         if self.phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
@@ -93,21 +93,32 @@ class YuFaceDetectNet(nn.Module):
     def multibox(self, num_classes):
         loc_layers = []
         conf_layers = []
+        iou_layers = []
+
         loc_layers += [nn.Conv2d(self.model3.out_channels, 3 * 14, kernel_size=3, padding=1, bias=True)]
         conf_layers += [nn.Conv2d(self.model3.out_channels, 3 * num_classes, kernel_size=3, padding=1, bias=True)]
+        iou_layers += [nn.Conv2d(self.model3.out_channels, 3, kernel_size=3, padding=1, bias=True)]
+
         loc_layers += [nn.Conv2d(self.model4.out_channels, 2 * 14, kernel_size=3, padding=1, bias=True)]
         conf_layers += [nn.Conv2d(self.model4.out_channels, 2 * num_classes, kernel_size=3, padding=1, bias=True)]
+        iou_layers += [nn.Conv2d(self.model4.out_channels, 2, kernel_size=3, padding=1, bias=True)]
+
         loc_layers += [nn.Conv2d(self.model5.out_channels, 2 * 14, kernel_size=3, padding=1, bias=True)]
         conf_layers += [nn.Conv2d(self.model5.out_channels, 2 * num_classes, kernel_size=3, padding=1, bias=True)]
+        iou_layers += [nn.Conv2d(self.model5.out_channels, 2, kernel_size=3, padding=1, bias=True)]
+
         loc_layers += [nn.Conv2d(self.model6.out_channels, 3 * 14, kernel_size=3, padding=1, bias=True)]
         conf_layers += [nn.Conv2d(self.model6.out_channels, 3 * num_classes, kernel_size=3, padding=1, bias=True)]
-        return nn.Sequential(*loc_layers), nn.Sequential(*conf_layers)
+        iou_layers += [nn.Conv2d(self.model6.out_channels, 3, kernel_size=3, padding=1, bias=True)]
+
+        return nn.Sequential(*loc_layers), nn.Sequential(*conf_layers), nn.Sequential(*iou_layers)
 
     def forward(self, x):
 
         detection_sources = list()
         loc_data = list()
         conf_data = list()
+        iou_data = list()
 
         x = self.model1(x)
         x = F.max_pool2d(x, 2)
@@ -128,19 +139,23 @@ class YuFaceDetectNet(nn.Module):
         x = self.model6(x)
         detection_sources.append(x)
 
-        for (x, l, c) in zip(detection_sources, self.loc, self.conf):
+        for (x, l, c, i) in zip(detection_sources, self.loc, self.conf, self.iou):
             loc_data.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf_data.append(c(x).permute(0, 2, 3, 1).contiguous())
+            iou_data.append(i(x).permute(0, 2, 3, 1).contiguous())
 
         loc_data = torch.cat([o.view(o.size(0), -1) for o in loc_data], 1)
         conf_data = torch.cat([o.view(o.size(0), -1) for o in conf_data], 1)
+        iou_data = torch.cat([o.view(o.size(0), -1) for o in iou_data], 1)
 
         if self.phase == "test":
           output = (loc_data.view(loc_data.size(0), -1, 14),
-                    self.softmax(conf_data.view(conf_data.size(0), -1, self.num_classes)))
+                    self.softmax(conf_data.view(conf_data.size(0), -1, self.num_classes)),
+                    self.softmax(iou_data.view(iou_data.size(0), -1, 1)))
         else:
           output = (loc_data.view(loc_data.size(0), -1, 14),
-                    conf_data.view(conf_data.size(0), -1, self.num_classes))
+                    conf_data.view(conf_data.size(0), -1, self.num_classes),
+                    iou_data.view(iou_data.size(0), -1, 1))
 
         return output
 

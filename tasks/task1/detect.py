@@ -113,7 +113,7 @@ if __name__ == '__main__':
     scale = scale.to(device)
 
     _t['forward_pass'].tic()
-    loc, conf = net(img)  # forward pass
+    loc, conf, iou = net(img)  # forward pass
     _t['forward_pass'].toc()
     _t['misc'].tic()
 
@@ -124,7 +124,9 @@ if __name__ == '__main__':
     boxes = decode(loc.data.squeeze(0), prior_data, cfg['variance'])
     boxes = boxes * scale
     boxes = boxes.cpu().numpy()
-    scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+    cls_scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+    iou_scores = iou.squeeze(0).data.cpu().numpy()[:, 0]
+    scores = np.sqrt(cls_scores * iou_scores)
 
     # ignore low scores
     inds = np.where(scores > args.confidence_threshold)[0]
@@ -154,7 +156,7 @@ if __name__ == '__main__':
     _t['misc'].toc()
 
     # save dets
-    face_cc = 0;
+    face_cc = 0
     for k in range(dets.shape[0]):
         if dets[k, 14] < args.vis_thres:
             continue

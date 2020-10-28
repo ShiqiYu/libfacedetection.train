@@ -127,7 +127,7 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
     if best_prior_idx_filter.shape[0] <= 0:
         loc_t[idx] = 0
         conf_t[idx] = 0
-        return
+        return torch.zeros((1, priors.shape[0]))
 
     # [1,num_priors] best ground truth for each prior
     best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
@@ -147,6 +147,8 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
     loc = encode(matches, priors, variances)
     loc_t[idx] = loc    # [num_priors,14] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
+
+    return best_truth_overlap
 
 
 def encode(matched, priors, variances):

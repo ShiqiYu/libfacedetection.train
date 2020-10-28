@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
-It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch). Visualization of the network architecture: [[netron]](https://lutzroeder.github.io/netron/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/tasks/task1/onnx/YuFaceDetectNet_320.onnx).
+It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [FaceBoxes.PyTorch](https://github.com/sfzhang15/FaceBoxes.PyTorch) and [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch). Visualization of the network architecture: [[netron]](https://netron.app/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/tasks/task1/onnx/YuFaceDetectNet_320.onnx).
 
 
 ### Contents
@@ -13,6 +13,7 @@ It is the training program for [libfacedetection](https://github.com/ShiqiYu/lib
 - [Export CPP source code](#export-cpp-source-code)
 - [Export to ONNX model](#export-to-onnx-model)
 - [Design your own model](#design-your-own-model)
+- [Citation](#citation)
 
 ## Installation
 1. Install [PyTorch](https://pytorch.org/) >= v1.0.0 following official instruction.
@@ -82,7 +83,7 @@ matlab -nodesktop -nosplash -r "run wider_eval.m;quit;"
 ### Performance on WIDER Face (Val)
 Run on default settings: scales=[1.], confidence_threshold=0.3:
 ```
-AP_easy=0.849, AP_medium=0.816, AP_hard=0.601
+AP_easy=0.860, AP_medium=0.831, AP_hard=0.640
 ```
 
 ## Export CPP source code
@@ -100,5 +101,8 @@ python exportonnx.py -m weights/yunet_final.pth
 ```
 
 ## Design your own model
-You can copy $TRAIN_ROOT/tasks/task1/ to $TRAIN_ROOT/tasks/task2/ or other similar directory, and then modify the model defined in file: tasks/task2/yufacedetectnet.py .
+You can copy `$TRAIN_ROOT/tasks/task1/` to `$TRAIN_ROOT/tasks/task2/` or other similar directory, and then modify the model defined in file: tasks/task2/yufacedetectnet.py .
 
+
+## Citation
+Our paper, which introduces a novel loss named Extended IoU (EIoU), is coming out soon. We trained our model using the EIoU loss and obtained a performance boost, see [Performance on WIDER Face (Val)](#performance-on-wider-face-(val)) for details. Stay tune for the release of our paper!

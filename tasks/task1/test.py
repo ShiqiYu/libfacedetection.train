@@ -10,9 +10,10 @@ import cv2
 import numpy as np
 from collections import OrderedDict
 
+from config import cfg
+
 sys.path.append(os.getcwd() + '/../../src')
 
-from config import cfg
 from prior_box import PriorBox
 from nms import nms
 from utils import decode
@@ -124,7 +125,7 @@ def detect_face(net, img, device, scale=1., conf_thresh=0.3):
         x = x.to(device)
 
     # forward pass
-    loc, conf = net(x)
+    loc, conf, iou = net(x)
 
     # get bounding boxes from PriorBox layer
     bbox_scale = torch.Tensor([width, height, width, height])
@@ -135,7 +136,9 @@ def detect_face(net, img, device, scale=1., conf_thresh=0.3):
     boxes = boxes * bbox_scale / scale
     boxes = boxes.cpu().numpy()
     # get scores
-    scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+    cls_scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+    iou_scores = iou.squeeze(0).data.cpu().numpy()[:, 0]
+    scores = np.sqrt(cls_scores * iou_scores)
 
     dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
     # ignore low scores

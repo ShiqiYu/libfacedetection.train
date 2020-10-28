@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from utils import match, log_sum_exp
+from eiou import eiou_loss
 
 GPU = True
 
@@ -42,6 +43,7 @@ class MultiBoxLoss(nn.Module):
         self.neg_overlap = neg_overlap
         self.variance = [0.1, 0.2]
         self.rect_only = rect_only
+        self.smooth_point = 0.2
 
     def forward(self, predictions, priors, targets):
         """Multibox Loss
@@ -56,7 +58,7 @@ class MultiBoxLoss(nn.Module):
                 shape: [batch_size,num_objs,15] (last idx is the label).
         """
 
-        loc_data, conf_data = predictions
+        loc_data, conf_data, iou_data = predictions
         priors = priors
         num = loc_data.size(0)
         num_priors = (priors.size(0))
@@ -64,15 +66,18 @@ class MultiBoxLoss(nn.Module):
         # match priors (default boxes) and ground truth boxes
         loc_t = torch.Tensor(num, num_priors, 14)
         conf_t = torch.LongTensor(num, num_priors)
+        iou_t = torch.Tensor(num, num_priors)
         for idx in range(num):
             truths = targets[idx][:, 0:14].data
             labels = targets[idx][:, -1].data
             defaults = priors.data
-            match(self.threshold, truths, defaults, self.variance, labels, loc_t, conf_t, idx)
+            iou_t[idx] = match(self.threshold, truths, defaults, self.variance, labels, loc_t, conf_t, idx)
+        iou_t = iou_t.view(num, num_priors, 1)
         if GPU:
             device = priors.get_device()
             loc_t = loc_t.cuda(device)
             conf_t = conf_t.cuda(device)
+            iou_t = iou_t.cuda(device)
 
         pos = conf_t > 0
 
@@ -81,10 +86,14 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 14)
         loc_t = loc_t[pos_idx].view(-1, 14)
-        loss_l = F.smooth_l1_loss(loc_p[:, 0:4], loc_t[:, 0:4], reduction='sum')
+        loss_l = eiou_loss(loc_p[:, 0:4], loc_t[:, 0:4], variance=self.variance, smooth_point=self.smooth_point, reduction='sum')
         loss_lm = F.smooth_l1_loss(loc_p[:, 4:14], loc_t[:, 4:14], reduction='sum')
-        #loss_l = F.mse_loss(loc_p[:, 0:4], loc_t[:, 0:4], reduction='sum')
-        #loss_lm = F.mse_loss(loc_p[:, 4:14], loc_t[:, 4:14], reduction='sum')
+
+        # IoU diff
+        pos_idx_ = pos.unsqueeze(pos.dim()).expand_as(iou_data)
+        iou_p = iou_data[pos_idx_].view(-1, 1)
+        iou_t = iou_t[pos_idx_].view(-1, 1)
+        loss_iou = F.smooth_l1_loss(iou_p, iou_t, reduction='sum')
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
@@ -111,5 +120,6 @@ class MultiBoxLoss(nn.Module):
         loss_l /= N
         loss_lm /= N
         loss_c /= N
+        loss_iou /= N
 
-        return loss_l, loss_lm, loss_c
+        return loss_l, loss_lm, loss_c, loss_iou

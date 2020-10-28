@@ -41,6 +41,8 @@ parser.add_argument('-max', '--max_epoch', default=500, type=int, help='max epoc
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--weight_filename_prefix', default='weights/yunet', help='the prefix of the weight filename')
+parser.add_argument('--lambda_bbox', default=1, type=int, help='lambda for bbox reg loss')
+parser.add_argument('--lambda_iouhead', default=1, type=int, help='lambda for iou head loss')
 args = parser.parse_args()
 
 
@@ -132,6 +134,7 @@ def train():
         loss_l_epoch = []
         loss_lm_epoch = []
         loss_c_epoch = []
+        loss_iou_epoch = []
         loss_epoch = []
 
         # the start time
@@ -149,12 +152,12 @@ def train():
             # forward
             out = net(images)
             # loss
-            loss_l, loss_lm, loss_c = criterion(out, priors, targets)
+            loss_l, loss_lm, loss_c, loss_iou = criterion(out, priors, targets)
 
             if with_landmark:
-                loss = loss_l + loss_lm + loss_c
+                loss = args.lambda_bbox * loss_l + loss_lm + loss_c + args.lambda_iouhead * loss_iou
             else:
-                loss = loss_l + loss_c
+                loss = args.lambda_bbox * loss_l + loss_c + args.lambda_iouhead * loss_iou
 
             # backprop
             optimizer.zero_grad()
@@ -165,15 +168,17 @@ def train():
             loss_l_epoch.append(loss_l.item())
             loss_lm_epoch.append(loss_lm.item())
             loss_c_epoch.append(loss_c.item())
+            loss_iou_epoch.append(loss_iou.item())
             loss_epoch.append(loss.item())
 
             # print loss
             if ( iter_idx % 20 == 0 or iter_idx == num_iter_in_epoch - 1):
-                print('LM:{} || Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
+                print('LM:{} || Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) IOU: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
                     with_landmark, epoch, max_epoch, iter_idx, num_iter_in_epoch, 
-                    loss_l.item(), np.mean(loss_l_epoch), 
-                    loss_lm.item(), np.mean(loss_lm_epoch), 
-                    loss_c.item(), np.mean(loss_c_epoch), 
+                    loss_l.item(), np.mean(loss_l_epoch),
+                    loss_iou.item(), np.mean(loss_iou_epoch),
+                    loss_lm.item(), np.mean(loss_lm_epoch),
+                    loss_c.item(), np.mean(loss_c_epoch),
                     loss.item(),  np.mean(loss_epoch), lr))
 
 
@@ -198,7 +203,7 @@ def adjust_learning_rate_poly(optimizer, initial_lr, iteration, max_iter):
       lr = 1.0e-7
 
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr;
+        param_group['lr'] = lr
 
     return lr
 
