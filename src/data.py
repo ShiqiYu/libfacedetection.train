@@ -308,16 +308,19 @@ class FaceRectLMDataset(data.Dataset):
         self.root = root
         self.preproc = PreProc(img_dim, rgb_mean)
         self.target_transform = AnnotationTransform()
-        self._annopath = os.path.join(self.root, 'annotations', '%s')
-        self._imgpath = os.path.join(self.root, 'images', '%s')
+        self._annopath = os.path.join(self.root, 'annotations', '{}')
+        self._imgpath = os.path.join(self.root, 'images', '{}', '{}')
         self.ids = list()
         with open(os.path.join(self.root, 'img_list.txt'), 'r') as f:
             self.ids = [tuple(line.split()) for line in f]
 
     def __getitem__(self, index):
         img_id = self.ids[index]
-        target = ET.parse(self._annopath % img_id[1]).getroot()
-        img = cv2.imread(self._imgpath % img_id[0], cv2.IMREAD_COLOR)
+        event_id = img_id[0].split('--')[0]
+        event_name = event_id + img_id[0].split(event_id)[1][:-1]
+        img_name = event_id + event_id.join(img_id[0].split(event_id)[2:])
+        target = ET.parse(self._annopath.format(img_id[1])).getroot()
+        img = cv2.imread(self._imgpath.format(event_name, img_name), cv2.IMREAD_COLOR)
         height, width, _ = img.shape
 
         if self.target_transform is not None:
