@@ -83,7 +83,7 @@ if __name__ == '__main__':
     img = img.to(torch.device('cpu'))
 
     input_names = ['input']
-    output_names = ['loc', 'conf']
+    output_names = ['loc', 'conf', 'iou']
     output_path = os.path.join('./onnx', args.output_name + '_' + str(args.image_dim) + '.onnx')
-    torch.onnx.export(net, img, output_path, input_names=['input'], output_names=['loc', 'conf'])
+    torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names)
     print('Finished exporing model to ' + output_path)
