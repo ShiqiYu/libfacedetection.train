@@ -83,7 +83,7 @@ matlab -nodesktop -nosplash -r "run wider_eval.m;quit;"
 ### Performance on WIDER Face (Val)
 Run on default settings: scales=[1.], confidence_threshold=0.3:
 ```
-AP_easy=0.860, AP_medium=0.831, AP_hard=0.640
+AP_easy=0.852, AP_medium=0.823, AP_hard=0.646
 ```
 
 ## Export CPP source code

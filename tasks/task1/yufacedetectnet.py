@@ -57,7 +57,7 @@ class Conv_3layers(nn.Module):
         x = self.conv3(x)
         return x
 
-       
+
 class YuFaceDetectNet(nn.Module):
 
     def __init__(self, phase, size):
@@ -151,7 +151,7 @@ class YuFaceDetectNet(nn.Module):
         if self.phase == "test":
           output = (loc_data.view(loc_data.size(0), -1, 14),
                     self.softmax(conf_data.view(conf_data.size(0), -1, self.num_classes)),
-                    self.softmax(iou_data.view(iou_data.size(0), -1, 1)))
+                    iou_data.view(iou_data.size(0), -1, 1))
         else:
           output = (loc_data.view(loc_data.size(0), -1, 14),
                     conf_data.view(conf_data.size(0), -1, self.num_classes),
@@ -195,9 +195,9 @@ class YuFaceDetectNet(nn.Module):
 
     def export_cpp(self, filename):
         '''This function can export CPP data file for libfacedetection'''
-        result_str = '// Auto generated data file\n';
+        result_str = '// Auto generated data file\n'
         result_str += '// Copyright (c) 2018-2020, Shiqi Yu, all rights reserved.\n'
-        result_str += '#include "facedetectcnn.h" \n\n';
+        result_str += '#include "facedetectcnn.h" \n\n'
         # ConvBNReLU types
         conv_bn_relu = [self.model1.conv1, self.model1.conv2,
                         self.model2.conv1, self.model2.conv2,
@@ -210,9 +210,10 @@ class YuFaceDetectNet(nn.Module):
         convs = []
         for c in conv_bn_relu:
             convs.append(c.combine_conv_bn())
-        for (l, c) in zip(self.loc, self.conf):
+        for (l, c, i) in zip(self.loc, self.conf, self.iou):
             convs.append(l)
             convs.append(c)
+            convs.append(i)
 
         # convert to int8(weight) and int(bias)
         # then convert to a string

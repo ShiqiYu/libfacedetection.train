@@ -138,6 +138,11 @@ def detect_face(net, img, device, scale=1., conf_thresh=0.3):
     # get scores
     cls_scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
     iou_scores = iou.squeeze(0).data.cpu().numpy()[:, 0]
+    # clamp here for the compatibility for ONNX
+    _idx = np.where(iou_scores < 0.)
+    iou_scores[_idx] = 0.
+    _idx = np.where(iou_scores > 1.)
+    iou_scores[_idx] = 1.
     scores = np.sqrt(cls_scores * iou_scores)
 
     dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
