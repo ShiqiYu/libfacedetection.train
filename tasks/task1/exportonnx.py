@@ -31,8 +31,6 @@ parser = argparse.ArgumentParser(description='Face and Landmark Detection')
 
 parser.add_argument('-m', '--trained_model', default='weights/yunet_final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('-d', '--image_dim', default=320,
-                    type=int, help='Input image width')
 parser.add_argument('-o', '--output_name', default='YuFaceDetectNet',
                     type=str, help='The output ONNX file, trained parameters inside')
 parser.add_argument('--enable_dynamic_axes', default=True,
@@ -84,12 +82,7 @@ if __name__ == '__main__':
 
     print('Finished loading model!')
     
-    height = 0.75 * args.image_dim
-    img_raw = np.zeros((args.image_dim, int(height), 3), np.uint8)
-    img = np.float32(img_raw)
-
-    img = img.transpose(2, 0, 1)
-    img = torch.from_numpy(img).unsqueeze(0)
+    img = torch.randn(1, 3, 480, 640, requires_grad=False)
     img = img.to(torch.device('cpu'))
 
     input_names = ['input']
