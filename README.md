@@ -107,4 +107,13 @@ You can copy `$TRAIN_ROOT/tasks/task1/` to `$TRAIN_ROOT/tasks/task2/` or other s
 
 
 ## Citation
-Our paper, which introduces a novel loss named Extended IoU (EIoU), is coming out soon. We trained our model using the EIoU loss and obtained a performance boost, see [Performance on WIDER Face (Val)](#performance-on-wider-face-(val)) for details. Stay tune for the release of our paper!
+The loss used in training is EIoU, a novel extended IoU. More details can be found in:
+
+	@article{eiou,
+	 title={A Systematic IoU-Related Method: Beyond Simplified Regression for Better Localization},
+	 author={Hanyang Peng and Shiqi Yu},
+	 journal={IEEE Transactions on Image Processing},
+	 year={2021}
+	 }
+
+The paper can be downloaded at https://ieeexplore.ieee.org/document/9429909.
