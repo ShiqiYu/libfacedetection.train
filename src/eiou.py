@@ -47,12 +47,14 @@ def eiou_loss(input, target, variance=[0.1, 0.2], smooth_point=0.2, reduction='s
     ymin = torch.min(iy1, iy2)
     # xmax = ix2
     # ymax = iy2
+    xmax = torch.max(ix1, ix2)
+    ymax = torch.max(iy1, iy2)
 
     # Intersection
     intersection = (ix2 - ex1) * (iy2 - ey1) +   \
                    (xmin - ex1) * (ymin - ey1) - \
-                   (ix1 - ex1) * (iy2 - ey1) -   \
-                   (ix2 - ex1) * (iy1 - ey1)
+                   (ix1 - ex1) * (ymax - ey1) -   \
+                   (xmax - ex1) * (iy1 - ey1)
     # Union
     union = (px2 - px1) * (py2 - py1) + \
             (tx2 - tx1) * (ty2 - ty1) - intersection + 1e-7
@@ -60,9 +62,9 @@ def eiou_loss(input, target, variance=[0.1, 0.2], smooth_point=0.2, reduction='s
     iou = intersection / union
 
     # EIoU
-    smooth_sign = (iou < smooth_point).detach().float()
+    smooth_sign = ((1 - iou) < smooth_point).detach().float()
     eiou = 0.5 * smooth_sign * ((1 - iou) ** 2) / smooth_point + \
-           (1 - smooth_point) * ((1 - iou) - 0.5 * smooth_point)
+           (1 - smooth_sign) * ((1 - iou) - 0.5 * smooth_point)
     eiou *= union.detach()
     if reduction is None:
         l = eiou
