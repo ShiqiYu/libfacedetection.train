@@ -89,9 +89,9 @@ if __name__ == '__main__':
     output_names = ['loc', 'conf', 'iou']
     if args.enable_dynamic_axes:
         dynamic_axes = {'input': {0: 'batch_size', 2: 'height', 3: 'width'},
-                        'loc':   {0: 'batch_size', 1: 'channel', 2: 'height', 3: 'width'},
-                        'conf':  {0: 'batch_size', 1: 'channel', 2: 'height', 3: 'width'},
-                        'iou':   {0: 'batch_size', 1: 'channel', 2: 'height', 3: 'width'}}
+                        'loc':   {0: 'batch_size', 1: 'num', 2: 'loc_data'},
+                        'conf':  {0: 'batch_size', 1: 'num', 2: 'cls_data'},
+                        'iou':   {0: 'batch_size', 1: 'num', 2: 'iou_data'}}
         output_path = os.path.join('./onnx', args.output_name + '.onnx')
         torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names, dynamic_axes=dynamic_axes)
     else:
