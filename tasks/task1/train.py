@@ -27,6 +27,11 @@ import resource
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (20000, rlimit[1]))
 
+def str2bool(s):
+    if s.lower() in ['true', 'yes', 'on']:
+        return True
+    return False
+
 parser = argparse.ArgumentParser(description='YuMobileNet Training')
 parser.add_argument('--training_face_rect_dir', default='../../data/WIDER_FACE_rect', help='Training dataset directory')
 parser.add_argument('--training_face_landmark_dir', default='../../data/WIDER_FACE_landmark', help='Training dataset directory')
@@ -41,10 +46,26 @@ parser.add_argument('-max', '--max_epoch', default=500, type=int, help='max epoc
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--weight_filename_prefix', default='weights/yunet', help='the prefix of the weight filename')
-parser.add_argument('--lambda_bbox', default=1, type=int, help='lambda for bbox reg loss')
-parser.add_argument('--lambda_iouhead', default=1, type=int, help='lambda for iou head loss')
+parser.add_argument('--lambda_bbox_eiou', default=10, type=int, help='lambda for bbox reg loss')
+parser.add_argument('--lambda_iouhead_smoothl1', default=1, type=int, help='lambda for iou head loss')
+parser.add_argument('--lambda_lm_smoothl1', default=1, type=float, help='lambda for landmark reg loss')
+parser.add_argument('--lambda_cls_ce', default=1, type=int, help='lambda for classification loss')
+parser.add_argument('--use_tensorboard', default=True, type=str2bool, help='True to use tensorboard.')
 args = parser.parse_args()
 
+
+
+if args.use_tensorboard:
+    from torch.utils.tensorboard import SummaryWriter
+    prefix = args.weight_filename_prefix.split('/')[-1]
+    log_tag = '{prefix}-bbox_{l_bbox}-iouhead_{l_iouhead}-lm_{l_lm}-cls_{l_cls}'.format(
+        prefix=prefix,
+        l_bbox=args.lambda_bbox_eiou,
+        l_iouhead=args.lambda_iouhead_smoothl1,
+        l_lm=args.lambda_lm_smoothl1,
+        l_cls=args.lambda_cls_ce
+    )
+    logger = SummaryWriter(os.path.join('./tb_logs', log_tag))
 
 img_dim = 320 # only 1024 is supported
 rgb_mean =  (0,0,0) #(104, 117, 123) # bgr order
@@ -131,10 +152,10 @@ def train():
         lr = adjust_learning_rate_poly(optimizer, args.lr, epoch, max_epoch)
 
         #for computing average losses in this epoch
-        loss_l_epoch = []
+        loss_bbox_epoch = []
+        loss_iouhead_epoch = []
         loss_lm_epoch = []
-        loss_c_epoch = []
-        loss_iou_epoch = []
+        loss_cls_epoch = []
         loss_epoch = []
 
         # the start time
@@ -144,7 +165,6 @@ def train():
         num_iter_in_epoch = len(train_loader)
         for iter_idx, one_batch_data in enumerate(train_loader):
             # load train data
-            #images, targets = next(batch_iterator)
             images, targets = one_batch_data
             images = images.to(device)
             targets = [anno.to(device) for anno in targets]
@@ -152,12 +172,17 @@ def train():
             # forward
             out = net(images)
             # loss
-            loss_l, loss_lm, loss_c, loss_iou = criterion(out, priors, targets)
+            loss_bbox_eiou, loss_iouhead_smoothl1, loss_lm_smoothl1, loss_cls_ce = criterion(out, priors, targets)
 
             if with_landmark:
-                loss = args.lambda_bbox * loss_l + loss_lm + loss_c + args.lambda_iouhead * loss_iou
+                loss = args.lambda_bbox_eiou * loss_bbox_eiou + \
+                       args.lambda_iouhead_smoothl1 * loss_iouhead_smoothl1 + \
+                       args.lambda_lm_smoothl1 * loss_lm_smoothl1 + \
+                       args.lambda_cls_ce * loss_cls_ce
             else:
-                loss = args.lambda_bbox * loss_l + loss_c + args.lambda_iouhead * loss_iou
+                loss = args.lambda_bbox_eiou * loss_bbox_eiou + \
+                       args.lambda_iouhead_smoothl1 * loss_iouhead_smoothl1 + \
+                       args.lambda_cls_ce * loss_cls_ce
 
             # backprop
             optimizer.zero_grad()
@@ -165,22 +190,65 @@ def train():
             optimizer.step()
 
             # put losses to lists to average for printing
-            loss_l_epoch.append(loss_l.item())
-            loss_lm_epoch.append(loss_lm.item())
-            loss_c_epoch.append(loss_c.item())
-            loss_iou_epoch.append(loss_iou.item())
+            loss_bbox_epoch.append(loss_bbox_eiou.item())
+            loss_iouhead_epoch.append(loss_iouhead_smoothl1.item())
+            loss_lm_epoch.append(loss_lm_smoothl1.item())
+            loss_cls_epoch.append(loss_cls_ce.item())
             loss_epoch.append(loss.item())
 
+            if args.use_tensorboard:
+                logger.add_scalar(
+                    tag='Iter/loss_bbox',
+                    scalar_value=loss_bbox_eiou.item(),
+                    global_step=iter_idx+epoch*num_iter_in_epoch
+                )
+                logger.add_scalar(
+                    tag='Iter/loss_iou',
+                    scalar_value=loss_iouhead_smoothl1.item(),
+                    global_step=iter_idx+epoch*num_iter_in_epoch
+                )
+                logger.add_scalar(
+                    tag='Iter/loss_landmark',
+                    scalar_value=loss_lm_smoothl1.item(),
+                    global_step=iter_idx+epoch*num_iter_in_epoch
+                )
+                logger.add_scalar(
+                    tag='Iter/loss_cls',
+                    scalar_value=loss_cls_ce.item(),
+                    global_step=iter_idx+epoch*num_iter_in_epoch
+                )
+
             # print loss
-            if ( iter_idx % 20 == 0 or iter_idx == num_iter_in_epoch - 1):
+            if (iter_idx % 20 == 0 or iter_idx == num_iter_in_epoch - 1):
                 print('LM:{} || Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) IOU: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
                     with_landmark, epoch, max_epoch, iter_idx, num_iter_in_epoch, 
-                    loss_l.item(), np.mean(loss_l_epoch),
-                    loss_iou.item(), np.mean(loss_iou_epoch),
-                    loss_lm.item(), np.mean(loss_lm_epoch),
-                    loss_c.item(), np.mean(loss_c_epoch),
+                    loss_bbox_eiou.item(), np.mean(loss_bbox_epoch),
+                    loss_iouhead_smoothl1.item(), np.mean(loss_iouhead_epoch),
+                    loss_lm_smoothl1.item(), np.mean(loss_lm_epoch),
+                    loss_cls_ce.item(), np.mean(loss_cls_epoch),
                     loss.item(),  np.mean(loss_epoch), lr))
 
+        if args.use_tensorboard:
+            logger.add_scalar(
+                tag='Epoch/loss_bbox',
+                scalar_value=np.mean(loss_bbox_epoch),
+                global_step=epoch
+            )
+            logger.add_scalar(
+                tag='Epoch/loss_iouhead',
+                scalar_value=np.mean(loss_iouhead_epoch),
+                global_step=epoch
+            )
+            logger.add_scalar(
+                tag='Epoch/loss_landmark',
+                scalar_value=np.mean(loss_lm_epoch),
+                global_step=epoch
+            )
+            logger.add_scalar(
+                tag='Epoch/loss_cls',
+                scalar_value=np.mean(loss_cls_epoch),
+                global_step=epoch
+            )
 
         if (epoch % 50 == 0 and epoch > 0) :
             torch.save(net.state_dict(), args.weight_filename_prefix + '_epoch_' + str(epoch) + '.pth')
@@ -188,7 +256,7 @@ def train():
         #the end time
         load_t1 = time.time()
         epoch_time = (load_t1 - load_t0) / 60
-        print('Epoch time: {:.2f} minutes; Time left: {:.2f} hours'.format(epoch_time, (epoch_time)*(max_epoch-epoch-1)/60 ))
+        print('Epoch time: {:.2f} minutes; Time left: {:.2f} hours'.format(epoch_time, (epoch_time)*(max_epoch-epoch-1)/60))
 
     torch.save(net.state_dict(), args.weight_filename_prefix + '_final.pth')
 

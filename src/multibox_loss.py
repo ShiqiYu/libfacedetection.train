@@ -86,23 +86,23 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 14)
         loc_t = loc_t[pos_idx].view(-1, 14)
-        loss_l = eiou_loss(loc_p[:, 0:4], loc_t[:, 0:4], variance=self.variance, smooth_point=self.smooth_point, reduction='sum')
-        loss_lm = F.smooth_l1_loss(loc_p[:, 4:14], loc_t[:, 4:14], reduction='sum')
+        loss_bbox_eiou = eiou_loss(loc_p[:, 0:4], loc_t[:, 0:4], variance=self.variance, smooth_point=self.smooth_point, reduction='sum')
+        loss_lm_smoothl1 = F.smooth_l1_loss(loc_p[:, 4:14], loc_t[:, 4:14], reduction='sum')
 
         # IoU diff
         pos_idx_ = pos.unsqueeze(pos.dim()).expand_as(iou_data)
         iou_p = iou_data[pos_idx_].view(-1, 1)
         iou_t = iou_t[pos_idx_].view(-1, 1)
-        loss_iou = F.smooth_l1_loss(iou_p, iou_t, reduction='sum')
+        loss_iouhead_smoothl1 = F.smooth_l1_loss(iou_p, iou_t, reduction='sum')
 
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
-        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+        loss_cls_ce = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
 
         # Hard Negative Mining
-        loss_c[pos.view(-1, 1)] = 0 # filter out pos boxes for now
-        loss_c = loss_c.view(num, -1)
-        _, loss_idx = loss_c.sort(1, descending=True)
+        loss_cls_ce[pos.view(-1, 1)] = 0 # filter out pos boxes for now
+        loss_cls_ce = loss_cls_ce.view(num, -1)
+        _, loss_idx = loss_cls_ce.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)
         num_pos = pos.long().sum(1, keepdim=True)
         num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
@@ -113,13 +113,13 @@ class MultiBoxLoss(nn.Module):
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
         conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1,self.num_classes)
         targets_weighted = conf_t[(pos+neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
+        loss_cls_ce = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
         # Sum of losses
         N = max(num_pos.data.sum().float(), 1)
-        loss_l /= N
-        loss_lm /= N
-        loss_c /= N
-        loss_iou /= N
+        loss_bbox_eiou /= N
+        loss_iouhead_smoothl1 /= N
+        loss_lm_smoothl1 /= N
+        loss_cls_ce /= N
 
-        return loss_l, loss_lm, loss_c, loss_iou
+        return loss_bbox_eiou, loss_iouhead_smoothl1, loss_lm_smoothl1, loss_cls_ce
