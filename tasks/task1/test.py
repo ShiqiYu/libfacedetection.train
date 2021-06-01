@@ -9,8 +9,11 @@ import argparse
 import cv2
 import numpy as np
 from collections import OrderedDict
+from tqdm import tqdm
 
 from config import cfg
+from yufacedetectnet import YuFaceDetectNet
+from datasets import WIDERFace
 
 sys.path.append(os.getcwd() + '/../../src')
 
@@ -18,10 +21,7 @@ from prior_box import PriorBox
 from nms import nms
 from utils import decode
 from timer import Timer
-from yufacedetectnet import YuFaceDetectNet
-
-from tqdm import tqdm
-from datasets import WIDERFace
+from widerface_eval.evaluation import evaluation
 
 
 def check_keys(model, pretrained_state_dict):
@@ -156,7 +156,7 @@ def save_res(dets, event, name):
     save_path = os.path.join(args.res_dir, event)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    
+
     with open(os.path.join(save_path, txt_name), 'w') as f:
         f.write('{}\n'.format('/'.join([event, name])))
         f.write('{}\n'.format(dets.shape[0]))
@@ -168,10 +168,10 @@ def save_res(dets, event, name):
             score = dets[k, 4]
             w = xmax - xmin + 1
             h = ymax - ymin + 1
-            f.write('{:.1f} {:.1f} {:.1f} {:.1f} {:.3f}\n'.format(np.floor(xmin), 
-                                                                  np.floor(ymin), 
-                                                                  np.ceil(w), 
-                                                                  np.ceil(h), 
+            f.write('{:.1f} {:.1f} {:.1f} {:.1f} {:.3f}\n'.format(np.floor(xmin),
+                                                                  np.floor(ymin),
+                                                                  np.ceil(w),
+                                                                  np.ceil(h),
                                                                   score))
 
 def get_available_scales(h, w, scales):
@@ -222,6 +222,10 @@ def main(args):
 
         save_res(dets, event, name)
 
+    # widerface_eval
+    print('Evaluating:')
+    evaluation(args.res_dir, os.path.join(args.widerface_root, 'eval_tools/ground_truth'))
+
 if __name__ == '__main__':
     def str2bool(v): # https://stackoverflow.com/a/43357954/6769366
         if isinstance(v, bool):
@@ -234,7 +238,7 @@ if __name__ == '__main__':
             raise argparse.ArgumentTypeError('Boolean value expected.')
 
     parser = argparse.ArgumentParser(description='Face and Landmark Detection')
-    parser.add_argument('--widerface_root', default='./widerface', type=str, help='Path to WIDER Face root')
+    parser.add_argument('--widerface_root', default='../data/widerface', type=str, help='Path to WIDER Face root')
     parser.add_argument('--widerface_split', default='val', type=str, help='Either val or test.', choices=['val', 'test'])
     parser.add_argument('--res_dir', default='./results', type=str, help='Path to save evaluation results.')
     parser.add_argument('--multi_scale', default=False, type=str2bool, help='Use multi-scale testing or not. Default: False.')
