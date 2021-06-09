@@ -46,7 +46,7 @@ _Note: Codes are based on Python 3+._
     ├── WIDER_train
     └── WIDER_val
     ```
-_NOTE: We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/train_label`._
+_NOTE: We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/widerface/train_label`._
 
 ## Training
 ```Shell
