@@ -119,7 +119,7 @@ class MultiBoxLoss(nn.Module):
         N = max(num_pos.data.sum().float(), 1)
         loss_bbox_eiou /= N
         loss_iouhead_smoothl1 /= N
-        loss_lm_smoothl1 /= N
+        loss_lm_smoothl1 /= (N*5)
         loss_cls_ce /= N
 
         return loss_bbox_eiou, loss_iouhead_smoothl1, loss_lm_smoothl1, loss_cls_ce

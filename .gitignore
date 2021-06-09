@@ -5,3 +5,11 @@
 **/.ipynb_checkpoints/**
 **/.vscode
 **/.vscode/**
+
+*.so
+src/widerface_eval/box_overlaps.c
+**/build
+**/build/**
+
+**/results
+**/results/**

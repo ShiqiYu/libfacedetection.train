@@ -9,6 +9,7 @@ Visualization of our network architecture: [[netron]](https://netron.app/?url=ht
 
 ### Contents
 - [Installation](#installation)
+- [Preparation](#Preparation)
 - [Training](#training)
 - [Detection](#detection)
 - [Evaluation on WIDER Face](#evaluation-on-wider-face)
@@ -34,33 +35,24 @@ _Note: Codes are based on Python 3+._
 
 ## Preparation
 
-1. Download the [WIDER Face](http://shuoyang1213.me/WIDERFACE/) dataset, including the [eval_tools](http://shuoyang1213.me/WIDERFACE/support/eval_script/eval_tools.zip) for evaluation.
-2. Extract zip files under `data/widerface` as follows:
+1. Download the [WIDER Face](http://shuoyang1213.me/WIDERFACE/) dataset.
+2. Extract zip files under `$TRAIN_ROOT/data/widerface` as follows:
     ```shell
     $ tree data/widerface
     data/widerface
-    ├── eval_tools
-    ├── relabel
+    ├── train_label
     ├── wider_face_split
     ├── WIDER_test
     ├── WIDER_train
     └── WIDER_val
     ```
+_NOTE: We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/train_label`._
 
 ## Training
-1. Create symbolic links to `WIDER_train/images` under `$TRAIN_ROOT/data/WIDER_FACE_rect` and `$TRAIN_ROOT/data/WIDER_FACE_landmark`:
-    ```Shell
-    cd $TRAIN_ROOT/data/WIDER_FACE_rect
-    ln -sf $TRAIN_ROOT/data/widerface/WIDER_train/images .
-
-    cd $TRAIN_ROOT/data/WIDER_FACE_landmark
-    ln -sf $TRAIN_ROOT/data/widerface/WIDER_train/images .
-    ```
-2. Train the model using WIDER FACE:
-    ```Shell
-    cd $TRAIN_ROOT/tasks/task1/
-    python train.py
-    ```
+```Shell
+cd $TRAIN_ROOT/tasks/task1/
+python train.py
+```
 
 ## Detection
 ```Shell
@@ -85,7 +77,7 @@ _NOTE: We now use the Python version of `eval_tools` from [here](https://github.
 
 Performance on WIDER Face (Val): scales=[1.], confidence_threshold=0.3:
 ```
-AP_easy=0.852, AP_medium=0.823, AP_hard=0.646
+AP_easy=0.834, AP_medium=0.824, AP_hard=0.708
 ```
 
 ## Export CPP source code

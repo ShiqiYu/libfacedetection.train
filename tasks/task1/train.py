@@ -18,7 +18,7 @@ from config import cfg
 
 sys.path.append(os.getcwd() + '/../../src')
 
-from data import FaceRectLMDataset, detection_collate
+from data import RetinaFaceDataset, detection_collate
 from multibox_loss import MultiBoxLoss
 from prior_box import PriorBox
 from yufacedetectnet import YuFaceDetectNet
@@ -33,8 +33,7 @@ def str2bool(s):
     return False
 
 parser = argparse.ArgumentParser(description='YuMobileNet Training')
-parser.add_argument('--training_face_rect_dir', default='../../data/WIDER_FACE_rect', help='Training dataset directory')
-parser.add_argument('--training_face_landmark_dir', default='../../data/WIDER_FACE_landmark', help='Training dataset directory')
+parser.add_argument('--dataset_dir', default='../../data/widerface', help='dataset directory')
 parser.add_argument('-b', '--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--gpu_ids', default='0', help='the IDs of GPU')
@@ -78,8 +77,7 @@ weight_decay = args.weight_decay
 #initial_lr = args.lr
 gamma = args.gamma
 max_epoch = args.max_epoch
-training_face_rect_dir = args.training_face_rect_dir
-training_face_landmark_dir = args.training_face_landmark_dir
+dataset_dir = args.dataset_dir
 
 net = YuFaceDetectNet('train', img_dim)
 print("Printing net...")
@@ -124,21 +122,11 @@ def train():
 
     #load the two dataset for face rectangles and landmarks respectively
     print('Loading Dataset...')
-    dataset_rect = FaceRectLMDataset(training_face_rect_dir, img_dim, rgb_mean)
-    dataset_landmark = FaceRectLMDataset(training_face_landmark_dir, img_dim, rgb_mean)
+    dataset = RetinaFaceDataset(dataset_dir, img_dim, rgb_mean)
     
     batch_size = args.batch_size
 
     for epoch in range(args.resume_epoch, max_epoch):
-        if epoch < 100 :
-            with_landmark = False
-        else:
-            with_landmark = (epoch % 2 == 1)
-
-        dataset = dataset_rect
-        if with_landmark:
-            dataset = dataset_landmark
-
         train_loader = data.DataLoader(
             dataset=dataset,
             batch_size=batch_size,
@@ -174,15 +162,10 @@ def train():
             # loss
             loss_bbox_eiou, loss_iouhead_smoothl1, loss_lm_smoothl1, loss_cls_ce = criterion(out, priors, targets)
 
-            if with_landmark:
-                loss = args.lambda_bbox_eiou * loss_bbox_eiou + \
-                       args.lambda_iouhead_smoothl1 * loss_iouhead_smoothl1 + \
-                       args.lambda_lm_smoothl1 * loss_lm_smoothl1 + \
-                       args.lambda_cls_ce * loss_cls_ce
-            else:
-                loss = args.lambda_bbox_eiou * loss_bbox_eiou + \
-                       args.lambda_iouhead_smoothl1 * loss_iouhead_smoothl1 + \
-                       args.lambda_cls_ce * loss_cls_ce
+            loss = args.lambda_bbox_eiou * loss_bbox_eiou + \
+                   args.lambda_iouhead_smoothl1 * loss_iouhead_smoothl1 + \
+                   args.lambda_lm_smoothl1 * loss_lm_smoothl1 + \
+                   args.lambda_cls_ce * loss_cls_ce
 
             # backprop
             optimizer.zero_grad()
@@ -220,8 +203,8 @@ def train():
 
             # print loss
             if (iter_idx % 20 == 0 or iter_idx == num_iter_in_epoch - 1):
-                print('LM:{} || Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) IOU: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
-                    with_landmark, epoch, max_epoch, iter_idx, num_iter_in_epoch, 
+                print('Epoch:{}/{} || iter: {}/{} || L: {:.2f}({:.2f}) IOU: {:.2f}({:.2f}) LM: {:.2f}({:.2f}) C: {:.2f}({:.2f}) All: {:.2f}({:.2f}) || LR: {:.8f}'.format(
+                    epoch, max_epoch, iter_idx, num_iter_in_epoch, 
                     loss_bbox_eiou.item(), np.mean(loss_bbox_epoch),
                     loss_iouhead_smoothl1.item(), np.mean(loss_iouhead_epoch),
                     loss_lm_smoothl1.item(), np.mean(loss_lm_epoch),

@@ -28,7 +28,7 @@ def _decode(deltas, variance=[0.1, 0.2]):
 
     return x1.view(-1), y1.view(-1), x2.view(-1), y2.view(-1)
 
-def eiou_loss(input, target, variance=[0.1, 0.2], smooth_point=0.2, reduction='sum'):
+def eiou_loss(input, target, variance=[0.1, 0.2], smooth_point=0.1, reduction='sum'):
     '''EIoU Implementation
     '''
     px1, py1, px2, py2 = _decode(input, variance)

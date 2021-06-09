@@ -1,0 +1,4 @@
+10--People_Marching/10_People_Marching_People_Marching_10_People_Marching_People_Marching_10_People_Marching_People_Marching_10_445.jpg
+2
+309.0 278.8 98.1 121.1 340.9 318.1 384.3 318.0 365.7 341.6 342.8 361.5 382.9 361.3 0.9995
+372.3 276.5 586.9 835.3 703.4 565.4 883.2 558.0 937.7 701.1 766.6 891.1 899.5 887.0 0.9990

@@ -289,43 +289,73 @@ class AnnotationTransform(object):
                 (res, bndbox))  # [xmin, ymin, xmax, ymax, label_ind, x1, y1, x2, y2, x3, y3, x4, y4, x5, y5]
         return res
 
+class RetinaFaceDataset(data.Dataset):
+    '''The training dataset is re-labeled by RetinaFace.
+    '''
 
-class FaceRectLMDataset(data.Dataset):
-    """Face data set with rectangles and/or landmarks
-    If there is landmark data for that face, the landmarks will be loaded
-    Otherwise, the landmark values will be zeros
-
-    input is image, target is annotation
-
-    Arguments:
-        root (string): filepath to WIDER folder
-        target_transform (callable, optional): transformation to perform on the
-            target `annotation`
-            (eg: take in caption string, return tensor of word indices)
-    """
-
-    def __init__(self, root, img_dim, rgb_mean):
+    def __init__(self, root, img_dim, rgb_mean, score=0.5, iou=0.1):
         self.root = root
         self.preproc = PreProc(img_dim, rgb_mean)
-        self.target_transform = AnnotationTransform()
-        self._annopath = os.path.join(self.root, 'annotations', '{}')
-        self._imgpath = os.path.join(self.root, 'images', '{}', '{}')
+
+        self.anno_path = os.path.join(self.root, 'train_label', '{}.txt')
+        self.img_path = os.path.join(self.root, 'WIDER_train', 'images', '{}.jpg')
+
         self.ids = list()
-        with open(os.path.join(self.root, 'img_list.txt'), 'r') as f:
-            self.ids = [tuple(line.split()) for line in f]
+        with open(os.path.join(self.root, 'train_label', 'anno_list.txt'), 'r') as f:
+            for line in f:
+                line = line.strip()
+                if '.txt' in line:
+                    line = line.replace('.txt', '')
+                self.ids.append(line)
 
-    def __getitem__(self, index):
-        img_id = self.ids[index]
-        event_id = img_id[0].split('--')[0]
-        event_name = event_id + img_id[0].split(event_id)[1][:-1]
-        img_name = event_id + event_id.join(img_id[0].split(event_id)[2:])
-        target = ET.parse(self._annopath.format(img_id[1])).getroot()
-        img = cv2.imread(self._imgpath.format(event_name, img_name), cv2.IMREAD_COLOR)
-        height, width, _ = img.shape
+    def load_anno(self, anno_filepath, scale_thresh=10):
+        '''In each anno_filepath:
+        img_subpath
+        face_num
+        face1 (x1, y1, w, h, lm0_x, lm0_y, lm1_x, lm1_y, lm2_x, lm2_y, lm3_x, lm3_y, lm4_x, lm4_y, score)
+        face2 (x1, y1, w, h, lm0_x, lm0_y, lm1_x, lm1_y, lm2_x, lm2_y, lm3_x, lm3_y, lm4_x, lm4_y, score)
+        ...
 
-        if self.target_transform is not None:
-            target = self.target_transform(target)
+        Load it into a numpy array nx(x1, y1, x2, y2, lm0_x, lm0_y, lm1_x, lm1_y, lm2_x, lm2_y, lm3_x, lm3_y, lm4_x, lm4_y)
+        '''
+        target = np.empty(shape=(0, 15), dtype=np.float32)
+        with open(anno_filepath, 'r') as f:
+            lines = f.readlines()
+            face_num = int(lines[1])
+            
+            for idx in range(face_num):
+                coords = [float(c) for c in lines[2+idx].split(' ')]
+                if coords[2] * coords[3] < scale_thresh * scale_thresh:
+                    continue
+                coords[2] = coords[0] + coords[2] # x2 = x1 + w
+                coords[3] = coords[1] + coords[3] # y2 = y1 + h
+                coords[-1] = 1                    # label = 1
+                target = np.vstack(
+                    (target, coords)
+                )
 
+            if target.shape[0] == 0:
+                for idx in range(face_num):
+                    coords = [float(c) for c in lines[2+idx].split(' ')]
+                    coords[2] = coords[0] + coords[2] # x2 = x1 + w
+                    coords[3] = coords[1] + coords[3] # y2 = y1 + h
+                    coords[-1] = 1                    # label = 1
+                    target = np.vstack(
+                        (target, coords)
+                    )
+
+        return target
+
+    def __getitem__(self, idx):
+        img_id = self.ids[idx]
+
+        # load annotation
+        target = self.load_anno(self.anno_path.format(img_id))
+
+        # load image
+        img = cv2.imread(self.img_path.format(img_id), cv2.IMREAD_COLOR)
+
+        # preprocess
         if self.preproc is not None:
             img, target = self.preproc(img, target)
 
@@ -333,7 +363,6 @@ class FaceRectLMDataset(data.Dataset):
 
     def __len__(self):
         return len(self.ids)
-
 
 def detection_collate(batch):
     """Custom collate fn for dealing with batches of images that have a different
