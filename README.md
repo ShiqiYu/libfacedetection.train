@@ -35,18 +35,19 @@ _Note: Codes are based on Python 3+._
 
 ## Preparation
 
-1. Download the [WIDER Face](http://shuoyang1213.me/WIDERFACE/) dataset.
+1. Download the [WIDER Face](http://shuoyang1213.me/WIDERFACE/) dataset and its [evaluation tools](http://shuoyang1213.me/WIDERFACE/support/eval_script/eval_tools.zip).
 2. Extract zip files under `$TRAIN_ROOT/data/widerface` as follows:
     ```shell
     $ tree data/widerface
     data/widerface
+    ├── eval_tools
     ├── train_label
     ├── wider_face_split
     ├── WIDER_test
     ├── WIDER_train
     └── WIDER_val
     ```
-_NOTE: We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/widerface/train_label`._
+_NOTE: We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/train_label`._
 
 ## Training
 ```Shell
