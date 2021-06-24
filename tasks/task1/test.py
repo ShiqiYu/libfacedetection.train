@@ -100,22 +100,33 @@ def bbox_vote(det, nms_thresh=0.3):
     dets = dets[0:750, :]
     return dets
 
-def simple_nms(dets, top_k=5000, nms_thresh=0.3):
+def nms_opencv(dets, score_thresh=0.3, nms_thresh=0.3, top_k=5000, keep_top_k=750):
     if dets.shape[0] == 0:
         dets = np.array([[10, 10, 20, 20, 0.002]])
-    # keep top-K before NMS
-    order = dets[:, -1].argsort()[::-1][:top_k]
-    dets = dets[order, :]
+        return dets
 
+    # retrive boxes and scores from dets
+    boxes = dets[:, 0:4].copy()
+    scores = dets[:, -1].copy()
+    # boxes: [x1, y1, x2, y2] -> [x1, y1, w, h]
+    boxes[:, 2] = boxes[:, 2] - boxes[:, 0]
+    boxes[:, 3] = boxes[:, 3] - boxes[:, 1]
     # do NMS
-    keep = nms(dets, nms_thresh)
-    dets = dets[keep, :]
-    # keep top-K faster NMS
-    dets = dets[:args.keep_top_k, :]
+    keep_idx = cv2.dnn.NMSBoxes(
+        bboxes=boxes.tolist(),
+        scores=scores.tolist(),
+        score_threshold=score_thresh,
+        nms_threshold=nms_thresh,
+        eta=1,
+        top_k=top_k
+    ) # returns [box_num, class_num]
+    keep_idx = np.squeeze(keep_idx, axis=1) # [box_num, class_num] -> [box_num]
+    dets = dets[keep_idx]
+    dets = dets[:keep_top_k]
 
     return dets
 
-def detect_face(net, img, device, scale=1., conf_thresh=0.3):
+def detect_face(net, img, device, scale=1.):
     # set input x
     if scale != 1:
         img = cv2.resize(img, None, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
@@ -146,9 +157,6 @@ def detect_face(net, img, device, scale=1., conf_thresh=0.3):
     scores = np.sqrt(cls_scores * iou_scores)
 
     dets = np.hstack((boxes, scores[:, np.newaxis])).astype(np.float32, copy=False)
-    # ignore low scores
-    keep_ind = np.where(dets[:, -1] > conf_thresh)[0]
-    dets = dets[keep_ind, :]
     return dets
 
 def save_res(dets, event, name):
@@ -210,14 +218,14 @@ def main(args):
     for idx in tqdm(range(len(widerface))):
         img, event, name = widerface[idx] # img_subpath = '0--Parade/XXX.jpg'
 
-        dets = detect_face(net, img, device, conf_thresh=args.confidence_threshold)
+        dets = detect_face(net, img, device)
         available_scales = get_available_scales(img.shape[0], img.shape[1], scales)
         for available_scale in available_scales:
-            det = detect_face(net, img, device, scale=available_scale, conf_thresh=args.confidence_threshold)
+            det = detect_face(net, img, device, scale=available_scale)
             if det is not None: dets = np.row_stack((dets, det))
 
         # nms
-        dets = simple_nms(dets)
+        dets = nms_opencv(dets, score_thresh=args.confidence_threshold, nms_thresh=args.nms_threshold, top_k=args.top_k, keep_top_k=args.keep_top_k)
         # dets = bbox_vote(dets)
 
         save_res(dets, event, name)
