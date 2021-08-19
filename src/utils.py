@@ -24,8 +24,8 @@ def center_size(boxes):
     Return:
         boxes: (tensor) Converted xmin, ymin, xmax, ymax form of boxes.
     """
-    return torch.cat((boxes[:, 2:4] + boxes[:, 0:2])/2,  # cx, cy
-                     boxes[:, 2:4] - boxes[:, 0:2], 1)  # w, h
+    return torch.cat(((boxes[:, 2:4] + boxes[:, 0:2])/2,  # cx, cy
+                     boxes[:, 2:4] - boxes[:, 0:2]), 1)  # w, h
 
 
 def intersect(box_a, box_b):
