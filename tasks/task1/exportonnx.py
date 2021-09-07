@@ -31,7 +31,7 @@ parser = argparse.ArgumentParser(description='Face and Landmark Detection')
 
 parser.add_argument('-m', '--trained_model', default='weights/yunet_final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('-o', '--output_name', default='YuFaceDetectNet',
+parser.add_argument('-o', '--output_name', default='yunet',
                     type=str, help='The output ONNX file, trained parameters inside')
 parser.add_argument('--enable_dynamic_axes', default=True,
                     type=str2bool, help='Enable dynamic axes for ONNX model.')
