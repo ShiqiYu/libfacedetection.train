@@ -784,7 +784,7 @@ class DaliWiderfaceDataset(object):
     def __len__(self):
         return len(self.dataloader)
 
-def get_train_loader(imgs_root, annos_file = None, local_seed = -1, num_gpus = 1, batch_size = 1, num_workers = 1, device_id = 0, shuffle=True, shuffle_after_epoch=False):
+def get_train_loader(imgs_root, annos_file, local_seed = -1, num_gpus = 1, batch_size = 1, num_workers = 1, device_id = 0, shuffle=True, shuffle_after_epoch=False):
     train_pipe = WiderfacePipeline_COCOformat(file_root=imgs_root, 
                                 annotations_file=annos_file, 
                                 batch_size = batch_size, 

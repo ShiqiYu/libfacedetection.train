@@ -10,15 +10,13 @@ import torch.utils.data as data
 
 import argparse
 import time
-import datetime
-import math
 import numpy as np
 
 from config import cfg
 
 sys.path.append(os.getcwd() + '/../../src')
 
-from data import RetinaFaceDataset, detection_collate
+from data import RetinaFaceDataset, detection_collate, get_train_loader
 from multibox_loss import MultiBoxLoss
 from prior_box import PriorBox
 from yufacedetectnet import YuFaceDetectNet
@@ -34,6 +32,7 @@ def str2bool(s):
 
 parser = argparse.ArgumentParser(description='YuMobileNet Training')
 parser.add_argument('--dataset_dir', default='../../data/widerface', help='dataset directory')
+parser.add_argument('--dali', default=True, type=str2bool, help='True to use NVIDIA DALI dataloader to train, which can speed up training process.')
 parser.add_argument('-b', '--batch_size', default=16, type=int, help='Batch size for training')
 parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--gpu_ids', default='0', help='the IDs of GPU')
@@ -122,11 +121,22 @@ def train():
 
     #load the two dataset for face rectangles and landmarks respectively
     print('Loading Dataset...')
-    dataset = RetinaFaceDataset(dataset_dir, img_dim, rgb_mean)
-    
     batch_size = args.batch_size
 
-    for epoch in range(args.resume_epoch, max_epoch):
+    if args.dali:
+        train_loader = get_train_loader(
+            imgs_root=os.path.join(args.dataset_dir, 'WIDER_train/images'),
+            annos_file=os.path.join(args.dataset_dir,'trainset.json'),
+            batch_size=batch_size,
+            num_workers=num_workers,
+            device_id=0,
+            local_seed=-1,
+            shuffle=True,
+            shuffle_after_epoch=False,
+            num_gpus=1,
+        )
+    else:
+        dataset = RetinaFaceDataset(dataset_dir, img_dim, rgb_mean)
         train_loader = data.DataLoader(
             dataset=dataset,
             batch_size=batch_size,
@@ -137,6 +147,8 @@ def train():
             drop_last=True,
         )
 
+
+    for epoch in range(args.resume_epoch, max_epoch):
         lr = adjust_learning_rate_poly(optimizer, args.lr, epoch, max_epoch)
 
         #for computing average losses in this epoch
