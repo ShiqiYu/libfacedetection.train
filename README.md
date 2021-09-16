@@ -41,7 +41,6 @@ _Note: Codes are based on Python 3+._
     $ tree data/widerface
     data/widerface
     ├── eval_tools
-    ├── train_label
     ├── wider_face_split
     ├── WIDER_test
     ├── WIDER_train
@@ -49,8 +48,8 @@ _Note: Codes are based on Python 3+._
     └── trainset.json           
     ```
 _NOTE: \
-We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in `$TRAIN_ROOT/data/widerface/train_label`.\
-`$TRAIN_ROOT/data/widerface/trainset.json`_ is the COCO_format annotations file used in DALI dataloader.
+We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in 
+`$TRAIN_ROOT/data/widerface/trainset.json`, which is the COCO_format annotations file used in DALI dataloader._
 
 ## Training
 ```Shell
