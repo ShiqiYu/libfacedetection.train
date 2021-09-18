@@ -6,19 +6,16 @@ import sys
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torch.utils.data as data
 
 import argparse
 import time
-import datetime
-import math
 import numpy as np
 
 from config import cfg
 
 sys.path.append(os.getcwd() + '/../../src')
 
-from data import RetinaFaceDataset, detection_collate
+from data import get_train_loader
 from multibox_loss import MultiBoxLoss
 from prior_box import PriorBox
 from yufacedetectnet import YuFaceDetectNet
@@ -67,7 +64,6 @@ if args.use_tensorboard:
     logger = SummaryWriter(os.path.join('./tb_logs', log_tag))
 
 img_dim = 320 # only 1024 is supported
-rgb_mean =  (0,0,0) #(104, 117, 123) # bgr order
 num_classes = 2
 gpu_ids =  [int(item) for item in args.gpu_ids.split(',')]
 num_workers = args.num_workers
@@ -122,21 +118,21 @@ def train():
 
     #load the two dataset for face rectangles and landmarks respectively
     print('Loading Dataset...')
-    dataset = RetinaFaceDataset(dataset_dir, img_dim, rgb_mean)
-    
     batch_size = args.batch_size
 
-    for epoch in range(args.resume_epoch, max_epoch):
-        train_loader = data.DataLoader(
-            dataset=dataset,
-            batch_size=batch_size,
-            collate_fn=detection_collate,
-            shuffle=True,
-            num_workers=num_workers,
-            pin_memory=False,
-            drop_last=True,
-        )
+    train_loader = get_train_loader(
+        imgs_root=os.path.join(args.dataset_dir, 'WIDER_train/images'),
+        annos_file=os.path.join(args.dataset_dir,'trainset.json'),
+        batch_size=batch_size,
+        num_workers=num_workers,
+        device_id=0,
+        local_seed=-1,
+        shuffle=True,
+        shuffle_after_epoch=False,
+        num_gpus=1,
+    )
 
+    for epoch in range(args.resume_epoch, max_epoch):
         lr = adjust_learning_rate_poly(optimizer, args.lr, epoch, max_epoch)
 
         #for computing average losses in this epoch
