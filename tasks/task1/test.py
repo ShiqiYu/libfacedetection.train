@@ -120,13 +120,16 @@ def nms_opencv(dets, score_thresh=0.3, nms_thresh=0.3, top_k=5000, keep_top_k=75
         eta=1,
         top_k=top_k
     ) # returns [box_num, class_num]
-    keep_idx = np.squeeze(keep_idx, axis=1) # [box_num, class_num] -> [box_num]
-    dets = dets[keep_idx]
-    dets = dets[:keep_top_k]
+    if len(keep_idx) > 0:
+        dets = dets[keep_idx]
+        dets = np.squeeze(dets, axis=1)
+        dets = dets[:keep_top_k]
+    else:
+        dets = np.empty((0, 5))
 
     return dets
 
-def detect_face(net, img, device, scale=1.):
+def detect_face(net, img, priors, device, scale=1.):
     # set input x
     if scale != 1:
         img = cv2.resize(img, None, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
@@ -140,8 +143,8 @@ def detect_face(net, img, device, scale=1.):
 
     # get bounding boxes from PriorBox layer
     bbox_scale = torch.Tensor([width, height, width, height])
-    priorbox = PriorBox(cfg, image_size=(height, width))
-    priors = priorbox.forward()
+    if scale != 1:
+        priors = PriorBox(cfg, image_size=(height, width)).forward()
     boxes = decode(loc.squeeze(0).data.cpu(), priors.data, cfg['variance'])
     boxes = boxes[:, :4] # omit landmarks
     boxes = boxes * bbox_scale / scale
@@ -211,28 +214,32 @@ def main(args):
     print('Finished loading data!')
 
     # start testing
-    scales = [1.]
+    scales = []
     if args.multi_scale:
         scales = [0.25, 0.50, 0.75, 1.25, 1.50, 1.75, 2.0]
-    print('Performing testing with scales: {}, conf_threshold: {}'.format(str(scales), args.confidence_threshold))
+    print('Performing testing with scales: 1. {}, conf_threshold: {}'.format(str(scales), args.confidence_threshold))
+    priors_dict = {}
     for idx in tqdm(range(len(widerface))):
         img, event, name = widerface[idx] # img_subpath = '0--Parade/XXX.jpg'
-
-        dets = detect_face(net, img, device)
+        if img.shape in priors_dict:
+            priors = priors_dict[img.shape]
+        else:
+            height, width, _ = img.shape
+            priors = PriorBox(cfg, image_size=(height, width)).forward()
+            priors_dict[img.shape] = priors
+        dets = detect_face(net, img, priors, device)
         available_scales = get_available_scales(img.shape[0], img.shape[1], scales)
         for available_scale in available_scales:
-            det = detect_face(net, img, device, scale=available_scale)
-            if det is not None: dets = np.row_stack((dets, det))
-
+            det = detect_face(net, img, None, device, scale=available_scale)
+            if det.shape[0] != 0: 
+                dets = np.row_stack((dets, det))
         # nms
         dets = nms_opencv(dets, score_thresh=args.confidence_threshold, nms_thresh=args.nms_threshold, top_k=args.top_k, keep_top_k=args.keep_top_k)
-        # dets = bbox_vote(dets)
-
         save_res(dets, event, name)
 
     # widerface_eval
     print('Evaluating:')
-    evaluation(args.res_dir, os.path.join(args.widerface_root, 'eval_tools/ground_truth'))
+    evaluation(args.res_dir, os.path.join(args.widerface_root, './ground_truth'))
 
 if __name__ == '__main__':
     def str2bool(v): # https://stackoverflow.com/a/43357954/6769366
