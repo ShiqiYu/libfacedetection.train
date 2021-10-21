@@ -233,7 +233,8 @@ def main(args):
             det = detect_face(net, img, None, device, scale=available_scale)
             if det.shape[0] != 0: 
                 dets = np.row_stack((dets, det))
-
+        # nms
+        dets = nms_opencv(dets, score_thresh=args.confidence_threshold, nms_thresh=args.nms_threshold, top_k=args.top_k, keep_top_k=args.keep_top_k)
         save_res(dets, event, name)
 
     # widerface_eval
