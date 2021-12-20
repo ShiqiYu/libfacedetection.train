@@ -35,6 +35,7 @@ parser.add_argument('-o', '--output_name', default='yunet',
                     type=str, help='The output ONNX file, trained parameters inside')
 parser.add_argument('--enable_dynamic_axes', default=True,
                     type=str2bool, help='Enable dynamic axes for ONNX model.')
+parser.add_argument('--opset_version', default=11, help='ONNX opset version to output.')
 args = parser.parse_args()
 
 def check_keys(model, pretrained_state_dict):
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     net.eval()
 
     print('Finished loading model!')
-    
+
     img = torch.randn(1, 3, 480, 640, requires_grad=False)
     img = img.to(torch.device('cpu'))
 
@@ -93,8 +94,8 @@ if __name__ == '__main__':
                         'conf':  {0: 'batch_size', 1: 'num', 2: 'cls_data'},
                         'iou':   {0: 'batch_size', 1: 'num', 2: 'iou_data'}}
         output_path = os.path.join('./onnx', args.output_name + '.onnx')
-        torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names, dynamic_axes=dynamic_axes)
+        torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names, dynamic_axes=dynamic_axes, opset_version=args.opset_version)
     else:
         output_path = os.path.join('./onnx', args.output_name + '_' + str(args.image_dim) + '.onnx')
-        torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names)
+        torch.onnx.export(net, img, output_path, input_names=input_names, output_names=output_names, opset_version=args.opset_version)
     print('Finished exporing model to ' + output_path)
