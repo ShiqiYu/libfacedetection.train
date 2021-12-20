@@ -21,7 +21,7 @@ from prior_box import PriorBox
 from nms import nms
 from utils import decode
 from timer import Timer
-from widerface_eval.evaluation import evaluation
+from eval import evaluation
 
 
 def check_keys(model, pretrained_state_dict):
@@ -122,7 +122,6 @@ def nms_opencv(dets, score_thresh=0.3, nms_thresh=0.3, top_k=5000, keep_top_k=75
     ) # returns [box_num, class_num]
     if len(keep_idx) > 0:
         dets = dets[keep_idx]
-        dets = np.squeeze(dets, axis=1)
         dets = dets[:keep_top_k]
     else:
         dets = np.empty((0, 5))
@@ -231,7 +230,7 @@ def main(args):
         available_scales = get_available_scales(img.shape[0], img.shape[1], scales)
         for available_scale in available_scales:
             det = detect_face(net, img, None, device, scale=available_scale)
-            if det.shape[0] != 0: 
+            if det.shape[0] != 0:
                 dets = np.row_stack((dets, det))
         # nms
         dets = nms_opencv(dets, score_thresh=args.confidence_threshold, nms_thresh=args.nms_threshold, top_k=args.top_k, keep_top_k=args.keep_top_k)
@@ -239,7 +238,7 @@ def main(args):
 
     # widerface_eval
     print('Evaluating:')
-    evaluation(args.res_dir, os.path.join(args.widerface_root, './ground_truth'))
+    evaluation(args.res_dir, os.path.join(args.widerface_root, 'eval_tools/ground_truth'))
 
 if __name__ == '__main__':
     def str2bool(v): # https://stackoverflow.com/a/43357954/6769366
