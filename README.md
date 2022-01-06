@@ -64,11 +64,13 @@ python detect.py -m weights/yunet_final.pth --image_file=filename.jpg
 ```
 
 ## Evaluation on WIDER Face
-Run on default settings to repoduce the evaluation results. Run `python test.py --help` for more options.
+Run on default settings to repoduce the evaluation results.
 ```shell
 cd $TRAIN_ROOT/tasks/task1/
 python test.py -m weights/yunet_final.pth
 ```
+
+ Run `python test.py --help` for more options.
 
 _NOTE: We use the modified Python version of `eval_tools` from [here](https://github.com/wondervictor/WiderFace-Evaluation)._
 
