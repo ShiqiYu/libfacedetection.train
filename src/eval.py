@@ -34,7 +34,6 @@ import pickle
 import argparse
 import numpy as np
 from scipy.io import loadmat
-from IPython import embed
 
 from utils import matrix_iou
 
