@@ -64,19 +64,15 @@ python detect.py -m weights/yunet_final.pth --image_file=filename.jpg
 ```
 
 ## Evaluation on WIDER Face
-1. Build NMS module.
-    ```shell
-    cd $TRAIN_ROOT/src/widerface_eval
-    python setup.py build_ext --inplace
-    ```
+Run on default settings to repoduce the evaluation results.
+```shell
+cd $TRAIN_ROOT/tasks/task1/
+python test.py -m weights/yunet_final.pth
+```
 
-2. Perform evaluation. To reproduce the following performance, run on the default settings. Run `python test.py --help` for more options.
-    ```shell
-    cd $TRAIN_ROOT/tasks/task1/
-    python test.py -m weights/yunet_final.pth
-    ```
+ Run `python test.py --help` for more options.
 
-_NOTE: We now use the Python version of `eval_tools` from [here](https://github.com/wondervictor/WiderFace-Evaluation)._
+_NOTE: We use the modified Python version of `eval_tools` from [here](https://github.com/wondervictor/WiderFace-Evaluation)._
 
 Performance on WIDER Face (Val): scales=[1.], confidence_threshold=0.3:
 ```
