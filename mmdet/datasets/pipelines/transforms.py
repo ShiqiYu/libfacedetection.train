@@ -255,6 +255,21 @@ class Resize:
                 bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
             results[key] = bboxes
 
+    def _resize_keypoints(self, results):
+        for key in results.get('keypoints_fields', []):
+            keypointss = results[key].copy()
+            factors = results['scale_factor']
+            assert factors[0]==factors[2]
+            assert factors[1]==factors[3]
+            #print('AAA', results['scale_factor'])
+            keypointss[:,:,0] *= factors[0]
+            keypointss[:,:,1] *= factors[1]
+            if self.bbox_clip_border:
+                img_shape = results['img_shape']
+                keypointss[:,:, 0] = np.clip(keypointss[:,:, 0], 0, img_shape[1])
+                keypointss[:,:, 1] = np.clip(keypointss[:,:, 1], 0, img_shape[0])
+            results[key] = keypointss
+
     def _resize_masks(self, results):
         """Resize masks with ``results['scale']``"""
         for key in results.get('mask_fields', []):
@@ -315,6 +330,7 @@ class Resize:
 
         self._resize_img(results)
         self._resize_bboxes(results)
+        self._resize_keypoints(results)
         self._resize_masks(results)
         self._resize_seg(results)
         return results
@@ -427,6 +443,21 @@ class RandomFlip:
             raise ValueError(f"Invalid flipping direction '{direction}'")
         return flipped
 
+    def keypoints_flip(self, keypointss, img_shape, direction):
+
+        assert direction == 'horizontal'
+        assert keypointss.shape[-1] == 3
+        assert keypointss.shape[1]==5
+
+        assert keypointss.ndim==3
+        flipped = keypointss.copy()
+        flip_order = [1,0,2,4,3]
+        for idx, a in enumerate(flip_order):
+            flipped[:,idx,:] = keypointss[:,a,:]
+        w = img_shape[1]
+        flipped[..., 0] = w - flipped[..., 0]
+        return flipped
+
     def __call__(self, results):
         """Call function to flip bounding boxes, masks, semantic segmentation
         maps.
@@ -470,6 +501,11 @@ class RandomFlip:
             # flip bboxes
             for key in results.get('bbox_fields', []):
                 results[key] = self.bbox_flip(results[key],
+                                              results['img_shape'],
+                                              results['flip_direction'])
+            # flip keypoints                            
+            for key in results.get('keypoints_fields', []):
+                results[key] = self.keypoints_flip(results[key],
                                               results['img_shape'],
                                               results['flip_direction'])
             # flip masks
@@ -905,6 +941,194 @@ class RandomCrop:
         repr_str += f'bbox_clip_border={self.bbox_clip_border})'
         return repr_str
 
+@PIPELINES.register_module()
+class RandomSquareCrop(object):
+    """Random crop the image & bboxes, the cropped patches have minimum IoU
+    requirement with original image & bboxes, the IoU threshold is randomly
+    selected from min_ious.
+
+    Args:
+        min_ious (tuple): minimum IoU threshold for all intersections with
+        bounding boxes
+        min_crop_size (float): minimum crop's size (i.e. h,w := a*h, a*w,
+        where a >= min_crop_size).
+
+    Note:
+        The keys for bboxes, labels and masks should be paired. That is, \
+        `gt_bboxes` corresponds to `gt_labels` and `gt_masks`, and \
+        `gt_bboxes_ignore` to `gt_labels_ignore` and `gt_masks_ignore`.
+    """
+
+    def __init__(self, crop_ratio_range=None, crop_choice=None, bbox_clip_border=True):
+
+        self.crop_ratio_range = crop_ratio_range
+        self.crop_choice = crop_choice
+        self.bbox_clip_border = bbox_clip_border
+
+        assert (self.crop_ratio_range is None) ^ (self.crop_choice is None)
+        if self.crop_ratio_range is not None:
+            self.crop_ratio_min, self.crop_ratio_max = self.crop_ratio_range
+
+        self.bbox2label = {
+            'gt_bboxes': 'gt_labels',
+            'gt_bboxes_ignore': 'gt_labels_ignore'
+        }
+        self.bbox2mask = {
+            'gt_bboxes': 'gt_masks',
+            'gt_bboxes_ignore': 'gt_masks_ignore'
+        }
+
+    def __call__(self, results):
+        """Call function to crop images and bounding boxes with minimum IoU
+        constraint.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images and bounding boxes cropped, \
+                'img_shape' key is updated.
+        """
+
+        if 'img_fields' in results:
+            assert results['img_fields'] == ['img'], \
+                'Only single img_fields is allowed'
+        img = results['img']
+        assert 'bbox_fields' in results
+        assert 'gt_bboxes' in results
+        boxes = results['gt_bboxes']
+        #boxes = [results[key] for key in results['bbox_fields']]
+        #boxes = np.concatenate(boxes, 0)
+        h, w, c = img.shape
+        scale_retry = 0
+        if self.crop_ratio_range is not None:
+            max_scale = self.crop_ratio_max
+        else:
+            max_scale = np.amax(self.crop_choice)
+        #max_scale = max(max_scale, float(max(w,h))/min(w,h))
+
+        while True:
+            scale_retry += 1
+
+            if scale_retry==1 or max_scale>1.0:
+                if self.crop_ratio_range is not None:
+                    scale = np.random.uniform(self.crop_ratio_min,
+                                              self.crop_ratio_max)
+                elif self.crop_choice is not None:
+                    scale = np.random.choice(self.crop_choice)
+            else:
+                #scale = min(scale*1.2, max_scale)
+                scale = scale*1.2
+
+            # print(scale, img.shape[:2], boxes)
+            # import cv2
+            # cv2.imwrite('aaa.png', img)
+
+            for i in range(250):
+                short_side = min(w, h)
+                cw = int(scale * short_side)
+                ch = cw
+
+                # TODO +1
+                if w==cw:
+                    left = 0
+                elif w>cw:
+                    #left = random.uniform(w - cw)
+                    left = random.randint(0, w - cw)
+                else:
+                    left = random.randint(w - cw, 0)
+                if h==ch:
+                    top = 0
+                elif h>ch:
+                    #top = random.uniform(h - ch)
+                    top = random.randint(0, h - ch)
+                else:
+                    top = random.randint(h - ch, 0)
+
+                patch = np.array(
+                    (int(left), int(top), int(left + cw), int(top + ch)), dtype=np.int)
+
+                # center of boxes should inside the crop img
+                # only adjust boxes and instance masks when the gt is not empty
+                # adjust boxes
+                def is_center_of_bboxes_in_patch(boxes, patch):
+                    # TODO >=
+                    center = (boxes[:, :2] + boxes[:, 2:]) / 2
+                    mask = ((center[:, 0] > patch[0]) *
+                            (center[:, 1] > patch[1]) *
+                            (center[:, 0] < patch[2]) *
+                            (center[:, 1] < patch[3]))
+                    return mask
+
+                mask = is_center_of_bboxes_in_patch(boxes, patch)
+                if not mask.any():
+                    continue
+                for key in results.get('bbox_fields', []):
+                    boxes = results[key].copy()
+                    #print('BBB', key, boxes.shape)
+                    mask = is_center_of_bboxes_in_patch(boxes, patch)
+                    boxes = boxes[mask]
+                    if self.bbox_clip_border:
+                        boxes[:, 2:] = boxes[:, 2:].clip(max=patch[2:])
+                        boxes[:, :2] = boxes[:, :2].clip(min=patch[:2])
+                    boxes -= np.tile(patch[:2], 2)
+
+                    results[key] = boxes
+                    # labels
+                    label_key = self.bbox2label.get(key)
+                    if label_key in results:
+                        results[label_key] = results[label_key][mask]
+
+                    # keypoints field
+                    if key=='gt_bboxes':
+                        for kps_key in results.get('keypoints_fields', []):
+                            keypointss = results[kps_key].copy()
+                            #print('AAAA', kps_key, keypointss.shape, mask.shape)
+                            keypointss = keypointss[mask,:,:]
+                            if self.bbox_clip_border:
+                                keypointss[:,:,:2] = keypointss[:,:,:2].clip(max=patch[2:])
+                                keypointss[:,:,:2] = keypointss[:,:,:2].clip(min=patch[:2])
+                            #keypointss[:,:,:2] -= np.tile(patch[:2], 2)
+                            keypointss[:,:,0] -= patch[0]
+                            keypointss[:,:,1] -= patch[1]
+                            results[kps_key] = keypointss
+
+                    # mask fields
+                    mask_key = self.bbox2mask.get(key)
+                    if mask_key in results:
+                        results[mask_key] = results[mask_key][mask.nonzero()
+                                                              [0]].crop(patch)
+
+                # adjust the img no matter whether the gt is empty before crop
+                #img = img[patch[1]:patch[3], patch[0]:patch[2]]
+                rimg = np.ones( (ch, cw, 3), dtype=img.dtype) * 128
+                patch_from = patch.copy()
+                patch_from[0] = max(0, patch_from[0])
+                patch_from[1] = max(0, patch_from[1])
+                patch_from[2] = min(img.shape[1], patch_from[2])
+                patch_from[3] = min(img.shape[0], patch_from[3])
+                patch_to = patch.copy()
+                patch_to[0] = max(0, patch_to[0]*-1)
+                patch_to[1] = max(0, patch_to[1]*-1)
+                patch_to[2] = patch_to[0] + (patch_from[2] - patch_from[0])
+                patch_to[3] = patch_to[1] + (patch_from[3] - patch_from[1])
+                rimg[patch_to[1]:patch_to[3], patch_to[0]:patch_to[2],:] = img[patch_from[1]:patch_from[3], patch_from[0]:patch_from[2], :]
+                #print(img.shape, scale, patch, patch_from, patch_to, rimg.shape)
+                img = rimg
+                results['img'] = img
+                results['img_shape'] = img.shape
+
+                # seg fields
+                #for key in results.get('seg_fields', []):
+                #    results[key] = results[key][patch[1]:patch[3],
+                #                                patch[0]:patch[2]]
+                return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(min_ious={self.min_iou}, '
+        repr_str += f'crop_size={self.crop_size})'
+        return repr_str
 
 @PIPELINES.register_module()
 class SegRescale:

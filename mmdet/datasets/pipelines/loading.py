@@ -203,14 +203,16 @@ class LoadMultiChannelImageFromFiles:
 
 
 @PIPELINES.register_module()
-class LoadAnnotations:
-    """Load multiple types of annotations.
+class LoadAnnotations(object):
+    """Load mutiple types of annotations.
 
     Args:
         with_bbox (bool): Whether to parse and load the bbox annotation.
              Default: True.
         with_label (bool): Whether to parse and load the label annotation.
             Default: True.
+        with_keypoints (bool): Whether to parse and load the keypoints annotation.
+            Default: False.
         with_mask (bool): Whether to parse and load the mask annotation.
              Default: False.
         with_seg (bool): Whether to parse and load the semantic segmentation
@@ -228,6 +230,7 @@ class LoadAnnotations:
     def __init__(self,
                  with_bbox=True,
                  with_label=True,
+                 with_keypoints=False,
                  with_mask=False,
                  with_seg=False,
                  poly2mask=True,
@@ -235,6 +238,7 @@ class LoadAnnotations:
                  file_client_args=dict(backend='disk')):
         self.with_bbox = with_bbox
         self.with_label = with_label
+        self.with_keypoints = with_keypoints
         self.with_mask = with_mask
         self.with_seg = with_seg
         self.poly2mask = poly2mask
@@ -355,6 +359,22 @@ class LoadAnnotations:
         results['gt_masks'] = gt_masks
         results['mask_fields'].append('gt_masks')
         return results
+        
+    def _load_keypoints(self, results):
+        """Private function to load bounding box annotations.
+
+        Args:
+            results (dict): Result dict from :obj:`mmdet.CustomDataset`.
+
+        Returns:
+            dict: The dict contains loaded bounding box annotations.
+        """
+
+        ann_info = results['ann_info']
+        results['gt_keypointss'] = ann_info['keypointss'].copy()
+
+        results['keypoints_fields'] = ['gt_keypointss']
+        return results
 
     def _load_semantic_seg(self, results):
         """Private function to load semantic segmentation annotations.
@@ -398,12 +418,15 @@ class LoadAnnotations:
             results = self._load_masks(results)
         if self.with_seg:
             results = self._load_semantic_seg(results)
+        if self.with_keypoints:
+            results = self._load_keypoints(results)
         return results
 
     def __repr__(self):
         repr_str = self.__class__.__name__
         repr_str += f'(with_bbox={self.with_bbox}, '
         repr_str += f'with_label={self.with_label}, '
+        repr_str += f'with_keypoints={self.with_keypoints}, '
         repr_str += f'with_mask={self.with_mask}, '
         repr_str += f'with_seg={self.with_seg}, '
         repr_str += f'poly2mask={self.poly2mask}, '

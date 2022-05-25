@@ -1,7 +1,5 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-import warnings
-
 import torch
+import torch.nn as nn
 
 from mmdet.core import bbox2result
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
@@ -22,13 +20,8 @@ class SingleStageDetector(BaseDetector):
                  bbox_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None,
-                 init_cfg=None):
-        super(SingleStageDetector, self).__init__(init_cfg)
-        if pretrained:
-            warnings.warn('DeprecationWarning: pretrained is deprecated, '
-                          'please use "init_cfg" instead')
-            backbone.pretrained = pretrained
+                 pretrained=None):
+        super(SingleStageDetector, self).__init__()
         self.backbone = build_backbone(backbone)
         if neck is not None:
             self.neck = build_neck(neck)
@@ -37,6 +30,24 @@ class SingleStageDetector(BaseDetector):
         self.bbox_head = build_head(bbox_head)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
+        self.init_weights(pretrained=pretrained)
+
+    def init_weights(self, pretrained=None):
+        """Initialize the weights in detector.
+
+        Args:
+            pretrained (str, optional): Path to pre-trained weights.
+                Defaults to None.
+        """
+        super(SingleStageDetector, self).init_weights(pretrained)
+        self.backbone.init_weights(pretrained=pretrained)
+        if self.with_neck:
+            if isinstance(self.neck, nn.Sequential):
+                for m in self.neck:
+                    m.init_weights()
+            else:
+                self.neck.init_weights()
+        self.bbox_head.init_weights()
 
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
@@ -48,7 +59,7 @@ class SingleStageDetector(BaseDetector):
     def forward_dummy(self, img):
         """Used for computing network flops.
 
-        See `mmdetection/tools/analysis_tools/get_flops.py`
+        See `mmdetection/tools/get_flops.py`
         """
         x = self.extract_feat(img)
         outs = self.bbox_head(x)
@@ -85,10 +96,10 @@ class SingleStageDetector(BaseDetector):
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):
-        """Test function without test-time augmentation.
+        """Test function without test time augmentation.
 
         Args:
-            img (torch.Tensor): Images with shape (N, C, H, W).
+            imgs (list[torch.Tensor]): List of multiple images
             img_metas (list[dict]): List of image information.
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
@@ -98,12 +109,28 @@ class SingleStageDetector(BaseDetector):
                 The outer list corresponds to each image. The inner list
                 corresponds to each class.
         """
-        feat = self.extract_feat(img)
-        results_list = self.bbox_head.simple_test(
-            feat, img_metas, rescale=rescale)
+        x = self.extract_feat(img)
+        outs = self.bbox_head(x)
+        #print(len(outs))
+        if torch.onnx.is_in_onnx_export():
+            print('single_stage.py in-onnx-export')
+            print(outs.__class__)
+            cls_score, bbox_pred = outs
+            for c in cls_score:
+                print(c.shape)
+            for c in bbox_pred:
+                print(c.shape)
+            #print(outs[0].shape, outs[1].shape)
+            return outs
+        bbox_list = self.bbox_head.get_bboxes(
+            *outs, img_metas, rescale=rescale)
+        # skip post-processing when exporting to ONNX
+        if torch.onnx.is_in_onnx_export():
+            return bbox_list
+
         bbox_results = [
             bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
-            for det_bboxes, det_labels in results_list
+            for det_bboxes, det_labels in bbox_list
         ]
         return bbox_results
 
@@ -128,44 +155,6 @@ class SingleStageDetector(BaseDetector):
         assert hasattr(self.bbox_head, 'aug_test'), \
             f'{self.bbox_head.__class__.__name__}' \
             ' does not support test-time augmentation'
-
+        print('aug-test:', len(imgs))
         feats = self.extract_feats(imgs)
-        results_list = self.bbox_head.aug_test(
-            feats, img_metas, rescale=rescale)
-        bbox_results = [
-            bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
-            for det_bboxes, det_labels in results_list
-        ]
-        return bbox_results
-
-    def onnx_export(self, img, img_metas, with_nms=True):
-        """Test function without test time augmentation.
-
-        Args:
-            img (torch.Tensor): input images.
-            img_metas (list[dict]): List of image information.
-
-        Returns:
-            tuple[Tensor, Tensor]: dets of shape [N, num_det, 5]
-                and class labels of shape [N, num_det].
-        """
-        x = self.extract_feat(img)
-        outs = self.bbox_head(x)
-        # get origin input shape to support onnx dynamic shape
-
-        # get shape as tensor
-        img_shape = torch._shape_as_tensor(img)[2:]
-        img_metas[0]['img_shape_for_onnx'] = img_shape
-        # get pad input shape to support onnx dynamic shape for exporting
-        # `CornerNet` and `CentripetalNet`, which 'pad_shape' is used
-        # for inference
-        img_metas[0]['pad_shape_for_onnx'] = img_shape
-
-        if len(outs) == 2:
-            # add dummy score_factor
-            outs = (*outs, None)
-        # TODO Can we change to `get_bboxes` when `onnx_export` fail
-        det_bboxes, det_labels = self.bbox_head.onnx_export(
-            *outs, img_metas, with_nms=with_nms)
-
-        return det_bboxes, det_labels
+        return [self.bbox_head.aug_test(feats, img_metas, rescale=rescale)]
