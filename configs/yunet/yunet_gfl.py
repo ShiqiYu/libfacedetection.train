@@ -9,16 +9,16 @@ lr_config = dict(
     step=[55*lr_mult, 68*lr_mult])
 total_epochs = 80*lr_mult
 checkpoint_config = dict(interval=80)
-log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
+log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
 dataset_type = 'RetinaFaceDataset'
-data_root = 'data/widerface/'
-train_root = 'data/widerface/'
-val_root = 'data/widerface/'
+data_root = 'data/retinaface/'
+train_root = 'data/retinaface/train/'
+val_root = 'data/retinaface/val/'
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[128.0, 128.0, 128.0], to_rgb=True)
 train_pipeline = [
@@ -162,12 +162,18 @@ model = dict(
         lateral_channel=32,
         out_idx=[0, 1, 2, 3]),
     bbox_head=dict(
-        type='WWHead',
+        type='WWHead_GFL',
         num_classes=1,
         in_channels=32,
         stacked_convs_num=1,
         feat_channels=64,
         strides=[8, 16, 32, 64],
+        anchor_generator=dict(
+            type='AnchorGenerator',
+            ratios=[1.0],
+            octave_base_scale=8,
+            scales_per_octave=1,
+            strides=[8, 16, 32, 64]),
         loss_cls=dict(
             type='QualityFocalLoss',
             use_sigmoid=True,
@@ -180,11 +186,10 @@ model = dict(
             type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1
         )),
     train_cfg=dict(
-        assigner=dict(type='SimOTAAssigner', candidate_topk=10),
+        assigner=dict(type='ATSSAssigner', topk=9),
         allowed_border=-1,
         pos_weight=-1,
-        debug=False
-    ),
+        debug=False),
     test_cfg=dict(
         nms_pre=-1,
         min_bbox_size=0,
@@ -193,21 +198,8 @@ model = dict(
         max_per_img=-1
     )    
 )
-# train_cfg = dict(
-#     assigner=dict(type='ATSSAssigner', topk=9),
-#     allowed_border=-1,
-#     pos_weight=-1,
-#     debug=False)
-# test_cfg = dict(
-#     nms_pre=-1,
-#     min_bbox_size=0,
-#     score_thr=0.02,
-#     nms=dict(type='nms', iou_threshold=0.45),
-#     max_per_img=-1)
 epoch_multi = 1
-evaluation = dict(interval=640, metric='mAP')
+evaluation = dict(interval=80, metric='mAP')
 # custom_hooks = [
 #     dict(type='WWHook')
 # ]
-
-find_unused_parameters = True
