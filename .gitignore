@@ -8,7 +8,7 @@ tools/widerface_eval/*.so
 tools/widerface_eval/box_overlaps.c
 tools/coco_eval/cocoapi
 /pretrain/*
-# teststream.sh
+teststream.sh
 /rebuid2yudet.ipynb
 /model_anasizy.py
 /images/*

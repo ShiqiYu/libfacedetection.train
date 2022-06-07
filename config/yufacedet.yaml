@@ -57,7 +57,7 @@ train:
 test:
   multi_scale: False
   confidence_threshold: 0.3
-  nms_threshold: 0.3
+  nms_threshold: 0.45
   keep_top_k: 750
   top_k: 5000  
   ap_threshold: 0.5

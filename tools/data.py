@@ -830,47 +830,30 @@ class Widerface_pytorch_loader(object):
     
 
 if __name__ == '__main__':
-    # loader = Widerface_pytorch_loader(
-    #     root='/home/ww/projects/yudet/data/widerface/WIDER_train/images',
-    #     annotations_file='/home/ww/projects/yudet/data/widerface/trainset.json',
-    #     batch_size=16,
-    #     num_workers=1,
-    #     pin_memory=True,
-    #     out_sizes=[320, 640]
-    # )
+    loader = Widerface_pytorch_loader(
+        root='/home/ww/projects/yudet/data/widerface/WIDER_train/images',
+        annotations_file='/home/ww/projects/yudet/data/widerface/trainset.json',
+        batch_size=16,
+        num_workers=1,
+        pin_memory=True,
+        out_sizes=[320, 640]
+    )
 
-    # for ids, one_batch_data in enumerate(loader):
-    #     images, targets = one_batch_data
-    #     images = images.permute(0, 2, 3, 1).contiguous()
-    #     images = images.numpy().astype(np.uint8)
-    #     for idx in range(images.shape[0]):
-    #         target, image = targets[idx], images[idx]
-    #         h, w, c = image.shape
-    #         bboxs = (target[:, :14] * w).numpy().astype(np.int32)
-    #         for box in bboxs:
-    #             x1, y1, x2, y2 = box[:4]
-    #             ldm = box[4:]
-    #             cv2.rectangle(image, pt1=(int(x1), int(y1)), pt2=(int(x2), int(y2)), color=(255, 255, 7))
-    #             for s in range(0, len(ldm), 2):
-    #                 cv2.circle(image, center=(int(ldm[s]), int(ldm[s+1])), radius=1, color=(7, 255, 255))
-    #         cv2.imwrite(f"./images/woca_{ids:04d}_{idx:04d}.jpg", image)
-    #     if ids > 50:
-    #         break
-    dataset = widerface_mosaic(
-            root='/home/ww/projects/yudet/data/widerface/WIDER_train/images',
-            annotations_file='/home/ww/projects/yudet/data/widerface/trainset.json',
-            use_mosaic=True,
-            size=640
-        )
-    np.random.seed(347)
-    for i in range(len(dataset)):
-        image, target = dataset.__getitem__(i)
-        h, w, c = image.shape
-        bboxs = (target[:, :14] * w).astype(np.int32)
-        for box in bboxs:
-            x1, y1, x2, y2 = box[:4]
-            ldm = box[4:]
-            cv2.rectangle(image, pt1=(int(x1), int(y1)), pt2=(int(x2), int(y2)), color=(255, 255, 7))
-            for s in range(0, len(ldm), 2):
-                cv2.circle(image, center=(int(ldm[s]), int(ldm[s+1])), radius=1, color=(7, 255, 255))
-            cv2.imwrite(f"./images/woca_{i:04d}.jpg", image)
+    for ids, one_batch_data in enumerate(loader):
+        images, targets = one_batch_data
+        images = images.permute(0, 2, 3, 1).contiguous()
+        images = images.numpy().astype(np.uint8)
+        for idx in range(images.shape[0]):
+            target, image = targets[idx], images[idx]
+            h, w, c = image.shape
+            bboxs = (target[:, :14] * w).numpy().astype(np.int32)
+            for box in bboxs:
+                x1, y1, x2, y2 = box[:4]
+                ldm = box[4:]
+                cv2.rectangle(image, pt1=(int(x1), int(y1)), pt2=(int(x2), int(y2)), color=(255, 255, 7))
+                for s in range(0, len(ldm), 2):
+                    cv2.circle(image, center=(int(ldm[s]), int(ldm[s+1])), radius=1, color=(7, 255, 255))
+            cv2.imwrite(f"./images/woca_{ids:04d}_{idx:04d}.jpg", image)
+        if ids > 50:
+            break
+

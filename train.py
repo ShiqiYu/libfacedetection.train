@@ -9,13 +9,6 @@ import torch.backends.cudnn as cudnn
 from model import YuDetectNet
 
 from tools import Logger, DaliWiderfaceDataset
-# try:
-#     import wandb
-#     has_wandb = True
-# except ImportError: 
-#     has_wandb = False
-
-
 
 parser = argparse.ArgumentParser(description='Yunet Training')
 parser.add_argument('--config', '-c', default='./config/yufacedet.yaml', type=str, help='config to train')
