@@ -19,3 +19,4 @@ teststream.sh
 /onnx_eval.sh
 /onnx_inference.py
 onnx/retinaface_resnet50_Final.onnx
+/weights_cpp
