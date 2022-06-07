@@ -2,7 +2,7 @@ import torch
 import argparse
 from model import YuDetectNet
 import yaml
-
+import os
 
 parser = argparse.ArgumentParser(description='Face and Landmark Detection')
 parser.add_argument('-c', '--config', default='./config/yufacedet.yaml',
@@ -60,5 +60,9 @@ if __name__ == '__main__':
 
     print('Finished loading model!')
     
-    net.export_cpp(args.output)
+    if not os.path.exists(os.path.dirname(args.output)):
+        os.makedirs(os.path.dirname(args.output))
+    cpp_data = net.export_cpp()
+    with open(args.output, 'w') as f:
+        f.write(cpp_data)
     print(f'Finish export cpp-data to {args.output}')

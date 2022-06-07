@@ -123,7 +123,7 @@ class YuDetectNet(nn.Module):
             dets = torch.empty((0, box_dim + 1)).to(device)
         return dets
 
-    def export_cpp(self, filename):
+    def export_cpp(self):
         '''This function can export CPP data file for libfacedetection'''
         result_str = '// Auto generated data file\n'
         result_str += '// Copyright (c) 2018-2021, Shiqi Yu, all rights reserved.\n'
@@ -195,11 +195,4 @@ class YuDetectNet(nn.Module):
 
         result_str += '};\n'
         
-
-        # write the content to a file
-        #print(result_str)
-        with open(filename, 'w') as f:
-            f.write(result_str)
-            f.close()
-
-        return 0 
+        return result_str
