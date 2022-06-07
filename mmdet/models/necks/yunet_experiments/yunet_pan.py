@@ -2,8 +2,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # from mmcv.runner import auto_fp16
-from ..utils.yunet_layer import ConvDPUnit, Conv4layerBlock
-from ..builder import NECKS
+from ...utils.yunet_layer import ConvDPUnit, Conv4layerBlock
+from ...builder import NECKS
 
 @NECKS.register_module()
 class WWHead_PAN(nn.Module):

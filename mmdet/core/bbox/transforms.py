@@ -222,9 +222,9 @@ def distance2kps(points, distance, max_shape=None):
         Tensor: Decoded kps.
     """
     preds = []
-    for i in range(0, distance.shape[1], 2):
-        px = points[:, i%2] + distance[:, i]
-        py = points[:, i%2+1] + distance[:, i+1]
+    for i in range(0, distance.shape[-1], 2):
+        px = points[..., i%2] + distance[..., i]
+        py = points[..., i%2+1] + distance[..., i+1]
         if max_shape is not None:
             px = px.clamp(min=0, max=max_shape[1])
             py = py.clamp(min=0, max=max_shape[0])

@@ -1,3 +1,4 @@
+from unittest import result
 import numpy as np
 import torch
 import torch.nn as nn
@@ -417,8 +418,7 @@ class WWHead(nn.Module):
                    cls_preds,
                    img_metas,
                    cfg=None,
-                   rescale=False,
-                   with_nms=True):
+                   rescale=True):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -474,145 +474,68 @@ class WWHead(nn.Module):
         batch_size = cls_preds.shape[0]
 
         device = cls_preds[0].device
-        featmap_sizes = [cls_preds[i].shape[-2:] for i in range(num_levels)]
-        mlvl_anchors = self.anchor_generator.grid_anchors(
-            featmap_sizes, device=device)
-
-        result_list = []
-        for img_id in range(len(img_metas)):
-            cls_score_list = [
-                cls_preds[i][img_id].detach() for i in range(num_levels)
-            ]
-            bbox_pred_list = [
-                bbox_preds[i][img_id].detach() for i in range(num_levels)
-            ]
-            img_shape = img_metas[img_id]['img_shape']
-            scale_factor = img_metas[img_id]['scale_factor']
-            if with_nms:
-                # some heads don't support with_nms argument
-                proposals = self._get_bboxes_single(cls_score_list,
-                                                    bbox_pred_list,
-                                                    mlvl_anchors, img_shape,
-                                                    scale_factor, cfg, rescale)
-            else:
-                proposals = self._get_bboxes_single(cls_score_list,
-                                                    bbox_pred_list,
-                                                    mlvl_anchors, img_shape,
-                                                    scale_factor, cfg, rescale,
-                                                    with_nms)
-            result_list.append(proposals)
-        return result_list
-
-    def _get_bboxes_single(self,
-                           cls_scores,
-                           bbox_preds,
-                           mlvl_anchors,
-                           img_shape,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True):
-        """Transform outputs for a single batch item into labeled boxes.
-
-        Args:
-            cls_scores (list[Tensor]): Box scores for a single scale level
-                has shape (num_classes, H, W).
-            bbox_preds (list[Tensor]): Box distribution logits for a single
-                scale level with shape (4*(n+1), H, W), n is max value of
-                integral set.
-            mlvl_anchors (list[Tensor]): Box reference for a single scale level
-                with shape (num_total_anchors, 4).
-            img_shape (tuple[int]): Shape of the input image,
-                (height, width, 3).
-            scale_factor (ndarray): Scale factor of the image arange as
-                (w_scale, h_scale, w_scale, h_scale).
-            cfg (mmcv.Config | None): Test / postprocessing configuration,
-                if None, test_cfg would be used.
-            rescale (bool): If True, return boxes in original image space.
-                Default: False.
-            with_nms (bool): If True, do nms before return boxes.
-                Default: True.
-
-        Returns:
-            tuple(Tensor):
-                det_bboxes (Tensor): Bbox predictions in shape (N, 5), where
-                    the first 4 columns are bounding box positions
-                    (tl_x, tl_y, br_x, br_y) and the 5-th column is a score
-                    between 0 and 1.
-                det_labels (Tensor): A (N,) tensor where each item is the
-                    predicted class label of the corresponding box.
-        """
-        cfg = self.test_cfg if cfg is None else cfg
-        assert len(cls_scores) == len(bbox_preds) == len(mlvl_anchors)
-        mlvl_bboxes = []
-        mlvl_scores = []
-        for cls_score, bbox_pred, stride, anchors in zip(
-                cls_scores, bbox_preds, self.anchor_generator.strides,
-                mlvl_anchors):
-            assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
-            assert stride[0] == stride[1]
-
-            scores = cls_score.permute(1, 2, 0).reshape(
-                -1, self.cls_out_channels).sigmoid()
-            bbox_pred = bbox_pred.permute(1, 2, 0)
-            if self.use_dfl:
-                bbox_pred = self.integral(bbox_pred) * stride[0]
-            else:
-                bbox_pred = bbox_pred.reshape( (-1,4) ) * stride[0]
-
-            nms_pre = cfg.get('nms_pre', -1)
-            if nms_pre > 0 and scores.shape[0] > nms_pre:
-                max_scores, _ = scores.max(dim=1)
-                _, topk_inds = max_scores.topk(nms_pre)
-                anchors = anchors[topk_inds, :]
-                bbox_pred = bbox_pred[topk_inds, :]
-                scores = scores[topk_inds, :]
-
-            bboxes = distance2bbox(
-                self.anchor_center(anchors), bbox_pred, max_shape=img_shape)
-            mlvl_bboxes.append(bboxes)
-            mlvl_scores.append(scores)
-
-        mlvl_bboxes = torch.cat(mlvl_bboxes)
-        if rescale:
-            mlvl_bboxes /= mlvl_bboxes.new_tensor(scale_factor)
-
-        mlvl_scores = torch.cat(mlvl_scores)
-        # Add a dummy background class to the backend when using sigmoid
-        # remind that we set FG labels to [0, num_class-1] since mmdet v2.0
-        # BG cat_id: num_class
-        padding = mlvl_scores.new_zeros(mlvl_scores.shape[0], 1)
-        mlvl_scores = torch.cat([mlvl_scores, padding], dim=1)
-
-        if with_nms:
-            det_bboxes, det_labels = multiclass_nms(mlvl_bboxes, mlvl_scores,
-                                                    cfg.score_thr, cfg.nms,
-                                                    cfg.max_per_img)
-            return det_bboxes, det_labels
-        else:
-            return mlvl_bboxes, mlvl_scores
-
-    def get_num_level_anchors_inside(self, num_level_anchors, inside_flags):
-        split_inside_flags = torch.split(inside_flags, num_level_anchors)
-        num_level_anchors_inside = [
-            int(flags.sum()) for flags in split_inside_flags
+        input_height, input_width = img_metas[0]['batch_input_shape']
+        input_shape = (input_height, input_width)
+        featmap_sizes = [
+            (math.floor(input_height / stride), math.floor(input_width / stride))
+            for stride in self.strides
         ]
-        return num_level_anchors_inside
 
-    def aug_test(self, feats, img_metas, rescale=False):
-        """Test function with test time augmentation.
+        # get grid cells of batch image [batch, N, 4]
+        mlvl_center_priors = [
+            self.get_single_level_center_priors(
+                batch_size,
+                featmap_sizes[i],
+                stride,
+                dtype=torch.float32,
+                device=device,
+            )
+            for i, stride in enumerate(self.strides)
+        ]
+        center_priors = torch.cat(mlvl_center_priors, dim=1)
+        bboxes = distance2bbox(center_priors[..., :2], bbox_preds.exp() * center_priors[..., 2, None], max_shape=input_shape)
+        # scale_factor = torch.cat([bboxes.new_tensor(img_metas[b]['scale_factor']) for b in range(batch_size)], dim=0)
 
-        Args:
-            feats (list[Tensor]): the outer list indicates test-time
-                augmentations and inner Tensor should have a shape NxCxHxW,
-                which contains features for all images in the batch.
-            img_metas (list[list[dict]]): the outer list indicates test-time
-                augs (multiscale, flip, etc.) and the inner list indicates
-                images in a batch. each dict has image information.
-            rescale (bool, optional): Whether to rescale the results.
-                Defaults to False.
+        # kps = distance2kps(center_priors[..., :2], kps_preds * center_priors[..., 2, None])
+        scores = cls_preds.sigmoid()
+        result_list = []
+        cfg = self.test_cfg if cfg is None else cfg
+        for img_id in range(batch_size):
+            score, bbox = scores[img_id], bboxes[img_id]
+            if rescale:
+                bboxes /= bboxes.new_tensor(img_metas[img_id]['scale_factor'])
+            padding = score.new_zeros(score.shape[0], 1)
+            score = torch.cat([score, padding], dim=1)
+            results = multiclass_nms(
+                bbox,
+                score,
+                score_thr=cfg.score_thr,
+                nms_cfg=cfg.nms,
+                max_num=cfg.max_per_img,
+                # return_inds=True
+            )
+            # import cv2
+            # import os
+            # import numpy as np
+            # img = cv2.imread(os.path.join('/home/ww/projects/wwdet_mmd', img_metas[img_id]['filename']))
+            # bbox_res = results[0][:, :4].cpu().numpy() / img_metas[img_id]['scale_factor']
+            # score_res = results[0][:, -1].cpu().numpy()
+            # inds = results[2].cpu().numpy()
+            # kps_res = kps[img_id].cpu().numpy()[inds].reshape(-1, 2) / img_metas[img_id]['scale_factor'][:2]
+            # kps_res = kps_res.reshape(-1, 10).astype(np.int32)
+            # mask = score_res > 0.2
+            # bbox_res = bbox_res.astype(np.int32)
+            # bbox_res = bbox_res[mask]
+            # kps_res = kps_res[mask]
+            # for i in range(bbox_res.shape[0]):
+            #     b = bbox_res[i]
+            #     cv2.rectangle(img, pt1=(b[0], b[1]), pt2=(b[2], b[3]), color=(255, 0, 0))
+            #     k = kps_res[i]
+            #     for i in range(5):
+            #         cv2.circle(img, center=(k[2*i], k[2*i + 1]), radius=1, color=(0, 0, 255))
+                
+            # cv2.imwrite('/home/ww/projects/wwdet_mmd/work_dirs/sample/result.jpg', img)
 
-        Returns:
-            list[ndarray]: bbox results of each class
-        """
-        return self.aug_test_bboxes(feats, img_metas, rescale=rescale)
+            # result_list.append((results[0], results[1]))
+            result_list.append(results)
+        return result_list

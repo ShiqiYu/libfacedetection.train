@@ -65,13 +65,13 @@ class YuNet(SingleStageDetector):
         outs = self.bbox_head(x)
         #print(len(outs))
         if torch.onnx.is_in_onnx_export():
-            print('single_stage.py in-onnx-export')
-            print(outs.__class__)
+            # print('single_stage.py in-onnx-export')
+            # print(outs.__class__)
             cls_score, bbox_pred, kps_pred = outs
-            for c in cls_score:
-                print(c.shape)
-            for c in bbox_pred:
-                print(c.shape)
+            # for c in cls_score:
+            #     print(c.shape)
+            # for c in bbox_pred:
+            #     print(c.shape)
             #print(outs[0].shape, outs[1].shape)
             if self.bbox_head.use_kps:
                 for c in kps_pred:

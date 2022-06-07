@@ -2,7 +2,7 @@
 import mmcv
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torch
 from ..builder import LOSSES
 from .utils import weighted_loss
 
@@ -40,7 +40,7 @@ def quality_focal_loss(pred, target, beta=2.0):
 
     # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
     bg_class_ind = pred.size(1)
-    pos = ((label >= 0) & (label < bg_class_ind)).nonzero().squeeze(1)
+    pos = torch.nonzero((label >= 0) & (label < bg_class_ind)).squeeze(1)
     pos_label = label[pos].long()
     # positives are supervised by bbox quality (IoU) score
     scale_factor = score[pos] - pred_sigmoid[pos, pos_label]

@@ -9,16 +9,16 @@ lr_config = dict(
     step=[55*lr_mult, 68*lr_mult])
 total_epochs = 80*lr_mult
 checkpoint_config = dict(interval=80)
-log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
+log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
 dataset_type = 'RetinaFaceDataset'
-data_root = 'data/retinaface/'
-train_root = 'data/retinaface/train/'
-val_root = 'data/retinaface/val/'
+data_root = 'data/widerface/'
+train_root = 'data/widerface/'
+val_root = 'data/widerface/'
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[128.0, 128.0, 128.0], to_rgb=True)
 train_pipeline = [
@@ -167,7 +167,6 @@ model = dict(
         in_channels=32,
         stacked_convs_num=1,
         feat_channels=64,
-        strides=[8, 16, 32, 64],
         anchor_generator=dict(
             type='AnchorGenerator',
             ratios=[1.0],
@@ -191,15 +190,18 @@ model = dict(
         pos_weight=-1,
         debug=False),
     test_cfg=dict(
-        nms_pre=-1,
+        nms_pre=300,
         min_bbox_size=0,
-        score_thr=0.02,
+        score_thr=0.3,
         nms=dict(type='nms', iou_threshold=0.45),
-        max_per_img=-1
+        max_per_img=-1,
+        # rescale=True
     )    
 )
 epoch_multi = 1
-evaluation = dict(interval=80, metric='mAP')
+evaluation = dict(interval=160, metric='mAP')
 # custom_hooks = [
 #     dict(type='WWHook')
 # ]
+
+find_unused_parameters = True

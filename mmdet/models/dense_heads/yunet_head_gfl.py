@@ -7,7 +7,8 @@ from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor_inside_flags, bbox2distance, bbox_overlaps,
-                        build_assigner, build_sampler, distance2bbox, distance2kps, kps2distance,
+                        build_assigner, build_sampler, build_prior_generator,
+                        distance2bbox, distance2kps, kps2distance,
                         images_to_levels, multi_apply, multiclass_nms,
                         reduce_mean, unmap)
 
@@ -20,7 +21,7 @@ import os
 import math
 
 @HEADS.register_module()
-class WWHead_GFL(AnchorHead):
+class WWHead_GFL(nn.Module):
     """Generalized Focal Loss: Learning Qualified and Distributed Bounding
     Boxes for Dense Object Detection.
 
@@ -57,12 +58,12 @@ class WWHead_GFL(AnchorHead):
                 in_channels,   
                 stacked_convs_num,
                 feat_channels,
-                strides,
                 use_kps=False,
                 kps_num=5,
                 loss_kps=None,
                 loss_cls=None,
                 loss_bbox=None,
+                anchor_generator=None,
                 train_cfg=None,
                 test_cfg=None):
         super(WWHead_GFL, self).__init__()
@@ -73,12 +74,6 @@ class WWHead_GFL(AnchorHead):
         self.num_classes = num_classes
         self.in_channels = in_channels
         self.feat_channels = feat_channels
-        if use_kps:
-            self.out_channels = self.num_classes + self.NK * 2 + 4
-        else:
-            self.out_channels = self.num_classes + 4
-        self.strides = strides
-        self.strides_num = len(self.strides)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         if self.train_cfg:
@@ -87,32 +82,36 @@ class WWHead_GFL(AnchorHead):
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
 
-
+        self.prior_generator = build_prior_generator(anchor_generator)
+        self.strides_num = len(self.prior_generator.strides)
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.loss_kps = build_loss(loss_kps)
         self._init_layers()
 
-
-        self.train_step = 0
-        self.pos_count = {}
-        self.gtgroup_count = {}
-
     def _init_layers(self):
         """Initialize layers of the head."""
-        self.stacked_convs = nn.ModuleList()
+        if self.stacked_convs_num > 0:
+            self.stacked_convs = nn.ModuleList()
         self.cls_convs = nn.ModuleList()
+        self.bbox_convs = nn.ModuleList()
+        if self.use_kps:
+            self.kps_convs = nn.ModuleList()
 
         for i in range(self.strides_num):
-            stack_conv = [ConvDPUnit(self.in_channels, self.feat_channels)]
-            for _ in range(self.stacked_convs_num - 1):
-                stack_conv.append(ConvDPUnit(self.feat_channels, self.feat_channels))    
-            self.stacked_convs.append(nn.Sequential(*stack_conv))
-            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.out_channels, False))
+            if self.stacked_convs_num > 0:
+                stack_conv = [ConvDPUnit(self.in_channels, self.feat_channels)]
+                for _ in range(self.stacked_convs_num - 1):
+                    stack_conv.append(ConvDPUnit(self.feat_channels, self.feat_channels))    
+                self.stacked_convs.append(nn.Sequential(*stack_conv))
+            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.num_classes, False))
+            self.bbox_convs.append(ConvDPUnit(self.feat_channels, 4, False))
+            if self.use_kps:
+                self.kps_convs.append(ConvDPUnit(self.feat_channels, self.NK * 2, False))
         self.init_weights()
 
     def init_weights(self):
-        for m in self.stacked_convs.modules():
+        for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 if m.bias is not None:
                     nn.init.xavier_normal_(m.weight.data)
@@ -126,13 +125,7 @@ class WWHead_GFL(AnchorHead):
         for m in self.cls_convs.modules():   
             if isinstance(m, nn.Conv2d):
                 if m.bias is not None:
-                    nn.init.xavier_normal_(m.weight.data)
                     m.bias.data.fill_(bias_cls)
-                else:
-                    m.weight.data.normal_(0, 0.01)
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
 
     def forward(self, feats):
         """Forward features from the upstream network.
@@ -150,17 +143,30 @@ class WWHead_GFL(AnchorHead):
                     scale levels, each is a 4D-tensor, the channel number is
                     4*(n+1), n is max value of integral set.
         """
-        outs = []
+        cls_preds_list = []
+        bbox_preds_list = []
+        kps_preds_list = []
         for i in range(self.strides_num):
-            x = self.stacked_convs[i](feats[i])
-            x = self.cls_convs[i](x)
-            outs.append(x)
-        head_data=torch.cat([x.flatten(start_dim=2) for x in outs], dim=-1).permute(0, 2, 1)
-        if self.use_kps:
-            output = head_data.split_with_sizes(split_sizes=(4, self.NK * 2, self.num_classes), dim=-1)
-        else:
-            output = head_data.split_with_sizes(split_sizes=(4, self.num_classes), dim=-1)
-        return output
+            if self.stacked_convs_num > 0:
+                x = self.stacked_convs[i](feats[i])
+            else:
+                x = feats[i]
+            cls_pred = self.cls_convs[i](x)
+            bbox_pred = self.bbox_convs[i](x)
+
+            cls_preds_list.append(cls_pred.flatten(start_dim=2).permute(0, 2, 1))
+            bbox_preds_list.append(bbox_pred.flatten(start_dim=2).permute(0, 2, 1))
+            if self.use_kps:
+                kps_pred = self.kps_convs[i](x)
+            else:
+                kps_pred = bbox_pred.new_zeros(\
+                    (bbox_pred.shape[0], self.NK*2, bbox_pred.shape[1], bbox_pred.shape[1]))
+            kps_preds_list.append(kps_pred.flatten(start_dim=2).permute(0, 2, 1))
+
+        if torch.onnx.is_in_onnx_export():
+            pass
+        
+        return cls_preds_list, bbox_preds_list, kps_preds_list
 
     def forward_train(self,
                       x,
@@ -195,7 +201,6 @@ class WWHead_GFL(AnchorHead):
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
             loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss, img_metas)
-        #print('AAA', gt_bboxes[0].shape, gt_keypointss[0].shape)
         
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if proposal_cfg is None:
@@ -204,48 +209,7 @@ class WWHead_GFL(AnchorHead):
             proposal_list = self.get_bboxes(*outs, img_metas, cfg=proposal_cfg)
             return losses, proposal_list
 
-    # def get_anchors(self, featmap_sizes, img_metas, device='cuda'):
-    #     """Get anchors according to feature map sizes.
 
-    #     Args:
-    #         featmap_sizes (list[tuple]): Multi-level feature map sizes.
-    #         img_metas (list[dict]): Image meta info.
-    #         device (torch.device | str): Device for returned tensors
-
-    #     Returns:
-    #         tuple:
-    #             anchor_list (list[Tensor]): Anchors of each image.
-    #             valid_flag_list (list[Tensor]): Valid flags of each image.
-    #     """
-    #     num_imgs = len(img_metas)
-
-    #     # since feature map sizes of all images are the same, we only compute
-    #     # anchors for one time
-    #     multi_level_anchors = self.anchor_generator.grid_anchors(
-    #         featmap_sizes, device)
-    #     anchor_list = [multi_level_anchors for _ in range(num_imgs)]
-
-    #     # for each image, we compute valid flags of multi level anchors
-    #     valid_flag_list = []
-    #     for img_id, img_meta in enumerate(img_metas):
-    #         multi_level_flags = self.anchor_generator.valid_flags(
-    #             featmap_sizes, img_meta['pad_shape'], device)
-    #         valid_flag_list.append(multi_level_flags)
-
-    #     return anchor_list, valid_flag_list
-
-    def anchor_center(self, anchors):
-        """Get anchor centers from anchors.
-
-        Args:
-            anchors (Tensor): Anchor list with shape (N, 4), "xyxy" format.
-
-        Returns:
-            Tensor: Anchor centers with shape (N, 2), "xy" format.
-        """
-        anchors_cx = (anchors[:, 2] + anchors[:, 0]) / 2
-        anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
-        return torch.stack([anchors_cx, anchors_cy], dim=-1)
 
     def loss_single(self, anchors, cls_score, bbox_pred, kps_pred, labels, label_weights,
                     bbox_targets, kps_targets, kps_weights, stride, num_total_samples):
@@ -275,29 +239,24 @@ class WWHead_GFL(AnchorHead):
         assert stride[0] == stride[1], 'h stride is not equal to w stride!'
         use_qscore = True
         anchors = anchors.reshape(-1, 4)
-        cls_score = cls_score.permute(0, 2, 3,
-                                      1).reshape(-1, self.cls_out_channels)
-        if not self.use_dfl:
-            bbox_pred = bbox_pred.permute(0, 2, 3,
-                                          1).reshape(-1, 4)
-        else:
-            bbox_pred = bbox_pred.permute(0, 2, 3,
-                                          1).reshape(-1, 4 * (self.reg_max + 1))
+
+        cls_score = cls_score.reshape(-1, self.num_classes)
         bbox_targets = bbox_targets.reshape(-1, 4)
+        bbox_pred = bbox_pred.reshape(-1, 4)
+        assert cls_score.shape[0] == bbox_pred.shape[0]
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
         if self.use_kps:
-            kps_pred = kps_pred.permute(0, 2, 3,
-                                          1).reshape(-1, self.NK*2)
             kps_targets = kps_targets.reshape( (-1, self.NK*2) )
             kps_weights = kps_weights.reshape( (-1, self.NK*2) )
-            #print('AAA000', kps_targets.shape, kps_weights.shape)
+            kps_pred = kps_pred.reshape(-1, self.NK*2)
 
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
-        pos_inds = ((labels >= 0)
-                    & (labels < bg_class_ind)).nonzero().squeeze(1)
+        # pos_inds = ((labels >= 0)
+        #             & (labels < bg_class_ind)).nonzero().squeeze(1)
+        pos_inds = torch.nonzero((labels >= 0) & (labels < bg_class_ind)).squeeze(1)
         score = label_weights.new_zeros(labels.shape)
 
         if len(pos_inds) > 0:
@@ -309,37 +268,15 @@ class WWHead_GFL(AnchorHead):
             weight_targets = cls_score.detach().sigmoid()
             weight_targets = weight_targets.max(dim=1)[0][pos_inds]
             pos_decode_bbox_targets = pos_bbox_targets / stride[0]
-
-
-            if self.use_dfl:
-                pos_bbox_pred_corners = self.integral(pos_bbox_pred)
-                pos_decode_bbox_pred = distance2bbox(pos_anchor_centers,
-                                                     pos_bbox_pred_corners)
-            else:
-                pos_decode_bbox_pred = distance2bbox(pos_anchor_centers,
+            pos_decode_bbox_pred = distance2bbox(pos_anchor_centers,
                                                      pos_bbox_pred)
             if self.use_kps:
                 pos_kps_targets = kps_targets[pos_inds]
                 pos_kps_pred = kps_pred[pos_inds]
-                #print('CCC000', kps_weights.shape)
                 pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds] * weight_targets
-                #pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds]
                 pos_kps_weights = pos_kps_weights.reshape( (-1, 1) )
-                #pos_kps_weights = kps_weights.max(dim=1, keepdims=True)[0][pos_inds]
-                #print('SSS', pos_kps_weights.sum())
-
-                #pos_decode_kps_targets = pos_kps_targets / stride[0]
-                #pos_decode_kps_pred = distance2kps(pos_anchor_centers, pos_kps_pred)
-
                 pos_decode_kps_targets = kps2distance(pos_anchor_centers, pos_kps_targets / stride[0])
                 pos_decode_kps_pred = pos_kps_pred
-                #print('ZZZ', pos_decode_kps_targets.shape, pos_decode_kps_pred.shape)
-                #print(pos_kps_weights[0,:].detach().cpu().numpy())
-                #print(pos_decode_kps_targets[0,:].detach().cpu().numpy())
-                #print(pos_decode_kps_pred[0,:].detach().cpu().numpy())
-
-
-                #print('CCC111', weight_targets.shape, pos_bbox_pred.shape, pos_decode_bbox_pred.shape, pos_kps_pred.shape, pos_decode_kps_pred.shape, pos_kps_weights.shape)
 
             if use_qscore:
                 score[pos_inds] = bbox_overlaps(
@@ -358,31 +295,17 @@ class WWHead_GFL(AnchorHead):
 
             if self.use_kps:
                 loss_kps = self.loss_kps(
-                    pos_decode_kps_pred * self.loss_kps_std,
-                    pos_decode_kps_targets * self.loss_kps_std,
+                    pos_decode_kps_pred,
+                    pos_decode_kps_targets,
                     weight=pos_kps_weights,
                     avg_factor=1.0)
             else:
                 loss_kps = kps_pred.sum() * 0
 
-            # dfl loss
-            if self.use_dfl:
-                pred_corners = pos_bbox_pred.reshape(-1, self.reg_max + 1)
-                target_corners = bbox2distance(pos_anchor_centers,
-                                               pos_decode_bbox_targets,
-                                               self.reg_max).reshape(-1)
-                loss_dfl = self.loss_dfl(
-                    pred_corners,
-                    target_corners,
-                    weight=weight_targets[:, None].expand(-1, 4).reshape(-1),
-                    avg_factor=4.0)
-            else:
-                loss_dfl = bbox_pred.sum() * 0
         else:
             loss_bbox = bbox_pred.sum() * 0
-            loss_dfl = bbox_pred.sum() * 0
             loss_kps = kps_pred.sum() * 0
-            weight_targets = torch.tensor(0).cuda()
+            weight_targets = bbox_pred.new_tensor(0)
 
         loss_cls = self.loss_cls(
             cls_score, (labels, score),
@@ -390,99 +313,13 @@ class WWHead_GFL(AnchorHead):
             avg_factor=num_total_samples)
 
 
-        return loss_cls, loss_bbox, loss_dfl, loss_kps, weight_targets.sum()
+        return loss_cls, loss_bbox, loss_kps, weight_targets.sum()
 
-    def get_single_level_center_priors(
-        self, batch_size, featmap_size, stride, dtype, device
-    ):
-        """Generate centers of a single stage feature map.
-        Args:
-            batch_size (int): Number of images in one batch.
-            featmap_size (tuple[int]): height and width of the feature map
-            stride (int): down sample stride of the feature map
-            dtype (obj:`torch.dtype`): data type of the tensors
-            device (obj:`torch.device`): device of the tensors
-        Return:
-            priors (Tensor): center priors of a single level feature map.
-        """
-        h, w = featmap_size
-        x_range = (torch.arange(w, dtype=dtype, device=device)) * stride
-        y_range = (torch.arange(h, dtype=dtype, device=device)) * stride
-        y, x = torch.meshgrid(y_range, x_range)
-        y = y.flatten()
-        x = x.flatten()
-        strides = x.new_full((x.shape[0],), stride)
-        proiors = torch.stack([x, y, strides, strides], dim=-1)
-        return proiors.unsqueeze(0).repeat(batch_size, 1, 1)
-
-    @torch.no_grad()
-    def target_assign_single_img(
-        self, cls_preds, bbox_decoded, kps_preds, center_priors, gt_bboxes, gt_kps, gt_labels
-    ):
-        """Compute classification, regression, and objectness targets for
-        priors in a single image.
-        Args:
-            cls_preds (Tensor): Classification predictions of one image,
-                a 2D-Tensor with shape [num_priors, num_classes]
-            center_priors (Tensor): All priors of one image, a 2D-Tensor with
-                shape [num_priors, 4] in [cx, xy, stride_w, stride_y] format.
-            bbox_decoded (Tensor): Decoded bboxes predictions of one image,
-                a 2D-Tensor with shape [num_priors, 4] in [tl_x, tl_y,
-                br_x, br_y] format.
-            gt_bboxes (Tensor): Ground truth bboxes of one image, a 2D-Tensor
-                with shape [num_gts, 4] in [tl_x, tl_y, br_x, br_y] format.
-            gt_labels (Tensor): Ground truth labels of one image, a Tensor
-                with shape [num_gts].
-        """
-
-        num_priors = center_priors.size(0)
-        num_gts = gt_labels.size(0)
-
-        bbox_targets = torch.zeros_like(bbox_decoded)
-        bbox_weights = torch.zeros_like(bbox_decoded)
-        kps_targets = torch.zeros_like(kps_preds)
-        kps_weights = torch.zeros_like(kps_preds)
-        labels = center_priors.new_full(
-            (num_priors,), self.num_classes, dtype=torch.long
-        )
-        label_scores = center_priors.new_zeros(labels.shape, dtype=torch.float)
-        # No target
-        if num_gts == 0:
-            return labels, label_scores, bbox_targets, kps_targets, 0
-
-        assign_result = self.assigner.assign(
-            cls_preds.sigmoid(), center_priors, bbox_decoded, gt_bboxes, gt_labels
-        )
-        sampling_result = self.sampler.sample(
-            assign_result, center_priors, gt_bboxes
-        )
-        pos_inds = sampling_result.pos_inds
-        neg_inds = sampling_result.neg_inds
-        num_pos_per_img = pos_inds.size(0)
-        pos_ious = assign_result.max_overlaps[pos_inds]
-        if len(pos_inds) > 0:
-            bbox_targets[pos_inds, :] = sampling_result.pos_gt_bboxes
-            bbox_weights[pos_inds, :] = 1.0
-            pos_assigned_gt_inds = sampling_result.pos_assigned_gt_inds
-            labels[pos_inds] = gt_labels[pos_assigned_gt_inds]
-            label_scores[pos_inds] = pos_ious
-            if self.use_kps:
-                kps_targets[pos_inds, :] = gt_kps[pos_assigned_gt_inds,:,:2].reshape( (-1, self.NK*2) )
-                kps_weights[pos_inds, :] = torch.mean(gt_kps[pos_assigned_gt_inds, :, 2], dim=1, keepdims=True)
-        return (
-            labels,
-            label_scores,
-            bbox_targets,
-            bbox_weights,
-            kps_targets,
-            kps_weights,
-            num_pos_per_img,
-        )
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
+             cls_preds,
              bbox_preds,
              kps_preds,
-             cls_preds,
              gt_bboxes,
              gt_labels,
              gt_keypointss,
@@ -513,85 +350,51 @@ class WWHead_GFL(AnchorHead):
         # featmap_sizes = [featmap.size()[-2:] for featmap in cls_preds]
         # assert len(featmap_sizes) == self.anchor_generator.num_levels
 
-        device = cls_preds.device
-        batch_size = cls_preds.shape[0]
+        device = cls_preds[0].device
+        batch_size = cls_preds[0].shape[0]
         input_height, input_width = img_metas[0]['batch_input_shape']
         featmap_sizes = [
-            (math.floor(input_height / stride), math.floor(input_width / stride))
-            for stride in self.strides
+            (math.floor(input_height / stride[0]), math.floor(input_width / stride[0]))
+            for stride in self.prior_generator.strides
         ]
+        anchor_list, valid_flag_list = self.get_anchors(
+            featmap_sizes, img_metas, device=device)
 
-        # get grid cells of batch image [batch, N, 4]
-        mlvl_center_priors = [
-            self.get_single_level_center_priors(
-                batch_size,
-                featmap_sizes[i],
-                stride,
-                dtype=torch.float32,
-                device=device,
-            )
-            for i, stride in enumerate(self.strides)
-        ]
-        priors_level_num = [x.shape[1] for x in mlvl_center_priors]
-        center_priors = torch.cat(mlvl_center_priors, dim=1).detach()
-        bboxes_decoded = distance2bbox(center_priors[..., :2], bbox_preds)
-        batch_assign_res = multi_apply(
-            self.target_assign_single_img,
-            cls_preds.detach(),
-            bboxes_decoded.detach(),
-            kps_preds.detach(),
-            center_priors,
+        cls_reg_targets = self.get_targets(
+            anchor_list,
+            valid_flag_list,
             gt_bboxes,
             gt_keypointss,
-            gt_labels,
-        )
+            img_metas,
+            gt_bboxes_ignore_list=gt_bboxes_ignore,
+            gt_labels_list=gt_labels,
+            label_channels=self.num_classes)
+        if cls_reg_targets is None:
+            return None
+            
+        (anchor_list, labels_list, label_weights_list, bbox_targets_list,
+         bbox_weights_list, keypoints_targets_list, keypoints_weights_list, 
+         num_total_pos, num_total_neg) = cls_reg_targets
 
+        num_total_samples = reduce_mean(
+            torch.tensor(num_total_pos, dtype=torch.float,
+                         device=device)).item()                         
+        num_total_samples = max(num_total_samples, 1.0)
 
-
-        (labels, label_scores, bbox_targets, bbox_weights, kps_targets, kps_weights, num_pos_per_img) = batch_assign_res
-        num_total_samples = max(
-            reduce_mean(torch.tensor(sum(num_pos_per_img), dtype=torch.float, device=device)).item(), 1.0
-        )
-        labels = torch.cat(labels, dim=0)
-        label_scores = torch.cat(label_scores, dim=0)
-        bbox_targets = torch.cat(bbox_targets, dim=0)
-        cls_preds = cls_preds.reshape(-1, self.num_classes)
-        kps_targets = torch.cat(kps_targets, dim=0)
-        bboxes_decoded = bboxes_decoded.reshape(-1, 4)
-
-        loss_qfl = self.loss_qfl(
-            cls_preds, (labels, label_scores), avg_factor=num_total_samples
-        )
-
-        pos_inds = torch.nonzero(
-            (labels >= 0) & (labels < self.num_classes), as_tuple=False
-        ).squeeze(1)
-
-        if len(pos_inds) > 0:
-            weight_targets = cls_preds[pos_inds].detach().sigmoid().max(dim=1)[0]
-            bbox_avg_factor = max(reduce_mean(weight_targets.sum()).item(), 1.0)
-
-            loss_bbox = self.loss_bbox(
-                bboxes_decoded[pos_inds],
-                bbox_targets[pos_inds],
-                weight=weight_targets,
-                avg_factor=bbox_avg_factor,
-            )
-            pos_kps_targets = kps_targets[pos_inds]
-            pos_kps_targets_encoded = kps2distance(center_priors.reshape(-1, 4)[pos_inds, :2], pos_kps_targets)
-            loss_kps = self.loss_kps(
-                kps_preds[pos_inds],
-                pos_kps_targets_encoded,
-                weight=ldm_weight_targets,
-                avg_factor=bbox_avg_factor)
-        else:
-            loss_bbox = reg_preds.sum() * 0
-            loss_kps = reg_preds.sum() * 0
-
-        #if self.train_step%100==0:
-        #    print('loss_cls:', losses_cls)
-        #    print('avg_factor:', avg_factor)
-
+        losses_cls, losses_bbox, losses_kps,\
+            avg_factor = multi_apply(
+                self.loss_single,
+                anchor_list,
+                cls_preds,
+                bbox_preds,
+                kps_preds,
+                labels_list,
+                label_weights_list,
+                bbox_targets_list,
+                keypoints_targets_list,
+                keypoints_weights_list,
+                self.prior_generator.strides,
+                num_total_samples=num_total_samples)     
 
         avg_factor = sum(avg_factor)
         avg_factor = reduce_mean(avg_factor).item()
@@ -600,20 +403,17 @@ class WWHead_GFL(AnchorHead):
         if self.use_kps:
             losses_kps = list(map(lambda x: x / avg_factor, losses_kps))
             losses['loss_kps'] = losses_kps
-        if self.use_dfl:
-            losses_dfl = list(map(lambda x: x / avg_factor, losses_dfl))
-            losses['loss_dfl'] = losses_dfl
         return losses
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'kps_preds'))
     def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   kps_preds,
-                   img_metas,
-                   cfg=None,
-                   rescale=False,
-                   with_nms=True):
+                cls_preds,
+                bbox_preds,
+                kps_preds,
+                img_metas,
+                cfg=None,
+                rescale=False,
+                with_nms=True):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -664,24 +464,30 @@ class WWHead_GFL(AnchorHead):
             >>> assert det_bboxes.shape[1] == 5
             >>> assert len(det_bboxes) == len(det_labels) == cfg.max_per_img
         """
-        assert len(cls_scores) == len(bbox_preds)
-        num_levels = len(cls_scores)
+        assert len(cls_preds) == len(bbox_preds)
+        num_levels = len(cls_preds)
 
-        device = cls_scores[0].device
-        featmap_sizes = [cls_scores[i].shape[-2:] for i in range(num_levels)]
-        mlvl_anchors = self.anchor_generator.grid_anchors(
+        device = cls_preds[0].device
+        input_height, input_width = img_metas[0]['batch_input_shape']
+        featmap_sizes = [
+            (math.floor(input_height / stride[0]), math.floor(input_width / stride[0]))
+            for stride in self.prior_generator.strides
+        ]
+        mlvl_anchors = self.prior_generator.grid_priors(
             featmap_sizes, device=device)
 
         result_list = []
         for img_id in range(len(img_metas)):
             cls_score_list = [
-                cls_scores[i][img_id].detach() for i in range(num_levels)
+                cls_preds[i][img_id].detach() for i in range(num_levels)
             ]
             bbox_pred_list = [
                 bbox_preds[i][img_id].detach() for i in range(num_levels)
             ]
             img_shape = img_metas[img_id]['img_shape']
             scale_factor = img_metas[img_id]['scale_factor']
+
+            rescale = True
             if with_nms:
                 # some heads don't support with_nms argument
                 proposals = self._get_bboxes_single(cls_score_list,
@@ -741,18 +547,13 @@ class WWHead_GFL(AnchorHead):
         mlvl_bboxes = []
         mlvl_scores = []
         for cls_score, bbox_pred, stride, anchors in zip(
-                cls_scores, bbox_preds, self.anchor_generator.strides,
+                cls_scores, bbox_preds, self.prior_generator.strides,
                 mlvl_anchors):
-            assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
             assert stride[0] == stride[1]
 
-            scores = cls_score.permute(1, 2, 0).reshape(
-                -1, self.cls_out_channels).sigmoid()
-            bbox_pred = bbox_pred.permute(1, 2, 0)
-            if self.use_dfl:
-                bbox_pred = self.integral(bbox_pred) * stride[0]
-            else:
-                bbox_pred = bbox_pred.reshape( (-1,4) ) * stride[0]
+            scores = cls_score.sigmoid()
+
+            bbox_pred = bbox_pred * stride[0]
 
             nms_pre = cfg.get('nms_pre', -1)
             if nms_pre > 0 and scores.shape[0] > nms_pre:
@@ -822,7 +623,7 @@ class WWHead_GFL(AnchorHead):
             gt_labels_list = [None for _ in range(num_imgs)]
         if gt_keypointss_list is None:
             gt_keypointss_list = [None for _ in range(num_imgs)]
-        #print('QQQ:', num_imgs, gt_bboxes_list[0].shape)
+
         (all_anchors, all_labels, all_label_weights, all_bbox_targets,
          all_bbox_weights, all_keypoints_targets, all_keypoints_weights, 
          pos_inds_list, neg_inds_list) = multi_apply(
@@ -919,14 +720,10 @@ class WWHead_GFL(AnchorHead):
 
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
-        if self.assigner.__class__.__name__=='ATSSAssigner':
-            assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
+        assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
                                                  gt_bboxes, gt_bboxes_ignore,
                                                  gt_labels)
-        else:
-            assign_result = self.assigner.assign(anchors, 
-                                                 gt_bboxes, gt_bboxes_ignore,
-                                                 gt_labels)
+
 
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes)
@@ -949,10 +746,8 @@ class WWHead_GFL(AnchorHead):
             bbox_weights[pos_inds, :] = 1.0
             if self.use_kps:
                 pos_assigned_gt_inds = sampling_result.pos_assigned_gt_inds
-                #print('BBB', anchors.shape, gt_bboxes.shape, gt_keypointss.shape, pos_inds.shape, bbox_targets.shape, pos_bbox_targets.shape)
                 kps_targets[pos_inds, :] = gt_keypointss[pos_assigned_gt_inds,:,:2].reshape( (-1, self.NK*2) )
                 kps_weights[pos_inds, :] = torch.mean(gt_keypointss[pos_assigned_gt_inds,:,2], dim=1, keepdims=True)
-            #kps_weights[pos_inds, :] = 1.0
             if gt_labels is None:
                 # Only rpn gives gt_labels as None
                 # Foreground is the first class
@@ -1009,3 +804,49 @@ class WWHead_GFL(AnchorHead):
             list[ndarray]: bbox results of each class
         """
         return self.aug_test_bboxes(feats, img_metas, rescale=rescale)
+
+    def get_anchors(self, featmap_sizes, img_metas, device='cuda'):
+        """Get anchors according to feature map sizes.
+
+        Args:
+            featmap_sizes (list[tuple]): Multi-level feature map sizes.
+            img_metas (list[dict]): Image meta info.
+            device (torch.device | str): Device for returned tensors
+
+        Returns:
+            tuple:
+                anchor_list (list[Tensor]): Anchors of each image.
+                valid_flag_list (list[Tensor]): Valid flags of each image.
+        """
+        num_imgs = len(img_metas)
+
+        # since feature map sizes of all images are the same, we only compute
+        # anchors for one time
+        multi_level_anchors = self.prior_generator.grid_priors(
+            featmap_sizes, device=device)
+        anchor_list = [multi_level_anchors for _ in range(num_imgs)]
+
+        # for each image, we compute valid flags of multi level anchors
+        valid_flag_list = []
+        for img_id, img_meta in enumerate(img_metas):
+            multi_level_flags = self.prior_generator.valid_flags(
+                featmap_sizes, img_meta['pad_shape'], device)
+            valid_flag_list.append(multi_level_flags)
+
+        return anchor_list, valid_flag_list
+
+
+    def anchor_center(self, anchors):
+        """Get anchor centers from anchors.
+
+        Args:
+            anchors (Tensor): Anchor list with shape (N, 4), "xyxy" format.
+
+        Returns:
+            Tensor: Anchor centers with shape (N, 2), "xy" format.
+        """
+        anchors_cx = (anchors[:, 2] + anchors[:, 0]) / 2
+        anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
+        return torch.stack([anchors_cx, anchors_cy], dim=-1)
+
+
