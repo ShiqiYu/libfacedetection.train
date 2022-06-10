@@ -1,14 +1,16 @@
 import argparse
-from datetime import datetime
 from time import time
 import onnx
 import onnxruntime
-import os.path as osp
+import os
 import cv2
 import numpy as np
 from tqdm import tqdm
 from math import ceil
 from itertools import product as product
+import torch.utils.data as data
+import scipy
+from mmdet.core.evaluation import wider_evaluation
 
 
 def softmax(z):
@@ -65,6 +67,53 @@ def nms(dets, thresh, opencv_mode=True):
         order = order[inds + 1]
 
     return keep
+
+def distance2bbox(self, points, distance, max_shape=None):
+    """Decode distance prediction to bounding box.
+
+    Args:
+        points (Tensor): Shape (n, 2), [x, y].
+        distance (Tensor): Distance from the given point to 4
+            boundaries (left, top, right, bottom).
+        max_shape (tuple): Shape of the image.
+
+    Returns:
+        Tensor: Decoded bboxes.
+    """
+    x1 = points[:, 0] - distance[:, 0]
+    y1 = points[:, 1] - distance[:, 1]
+    x2 = points[:, 0] + distance[:, 2]
+    y2 = points[:, 1] + distance[:, 3]
+    if max_shape is not None:
+        x1 = x1.clamp(min=0, max=max_shape[1])
+        y1 = y1.clamp(min=0, max=max_shape[0])
+        x2 = x2.clamp(min=0, max=max_shape[1])
+        y2 = y2.clamp(min=0, max=max_shape[0])
+    return np.stack([x1, y1, x2, y2], axis=-1)
+
+def distance2kps(self, points, distance, max_shape=None):
+    """Decode distance prediction to bounding box.
+
+    Args:
+        points (Tensor): Shape (n, 2), [x, y].
+        distance (Tensor): Distance from the given point to 4
+            boundaries (left, top, right, bottom).
+        max_shape (tuple): Shape of the image.
+
+    Returns:
+        Tensor: Decoded bboxes.
+    """
+    preds = []
+    for i in range(0, distance.shape[1], 2):
+        px = points[..., i%2] + distance[..., i]
+        py = points[..., i%2+1] + distance[..., i+1]
+        if max_shape is not None:
+            px = px.clamp(min=0, max=max_shape[1])
+            py = py.clamp(min=0, max=max_shape[0])
+        preds.append(px)
+        preds.append(py)
+    return np.stack(preds, axis=-1)   
+
 
 def resize_img(img, mode):
     if mode == 'ORIGIN':
@@ -177,11 +226,67 @@ class TimeEngine:
     def set_mode(self, mode='s'):
         for k, v in self.container.items():
             v.set_mode(mode)
+
+
+class WIDERFace(data.Dataset):
+    '''Dataset class for WIDER Face dataset'''
+
+    def __init__(self, root, split='val'):
+        self.root = root
+        self.split = split
+        assert self.root is not None
+
+        self.widerface_img_paths = {
+            'val':  os.path.join(self.root, 'WIDER_val', 'images'),
+            'test': os.path.join(self.root, 'WIDER_test', 'images')
+        }
+
+        self.widerface_split_fpaths = {
+            'val':  os.path.join(self.root, 'wider_face_split', 'wider_face_val.mat'),
+            'test': os.path.join(self.root, 'wider_face_split', 'wider_face_test.mat')
+        }
+
+        self.img_list, self.num_img = self.load_list()
+
+    def load_list(self):
+        n_imgs = 0
+        flist = []
+
+        split_fpath = self.widerface_split_fpaths[self.split]
+        img_path = self.widerface_img_paths[self.split]
+
+        anno_data = scipy.io.loadmat(split_fpath)
+        event_list = anno_data.get('event_list')
+        file_list = anno_data.get('file_list')
+
+        for event_idx, event in enumerate(event_list):
+            event_name = event[0][ 0]
+            for f_idx, f in enumerate(file_list[event_idx][0]):
+                f_name = f[0][0]
+                f_path = os.path.join(img_path, event_name, f_name+'.jpg')
+                flist.append(f_path)
+                n_imgs += 1
+
+        return flist, n_imgs
+
+    def __getitem__(self, index):
+        img = cv2.imread(self.img_list[index])
+        event, name = self.img_list[index].split('/')[-2:]
+        return img, event, name
+
+    def __len__(self):
+        return self.num_img
+
+    @property
+    def size(self):
+        return self.num_img
+
+
 class Detector:
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:
         self.model_file = model_file
         self.nms_thresh = nms_thresh
-        assert osp.exists(self.model_file)
+        assert os.path.exists(self.model_file)
         model = onnx.load(model_file)
         onnx.checker.check_model(model) 
         self.session = onnxruntime.InferenceSession(self.model_file, None)
@@ -240,51 +345,6 @@ class SCRFD(Detector):
 
     def preprocess(self, img):
         pass
-    def distance2bbox(self, points, distance, max_shape=None):
-        """Decode distance prediction to bounding box.
-
-        Args:
-            points (Tensor): Shape (n, 2), [x, y].
-            distance (Tensor): Distance from the given point to 4
-                boundaries (left, top, right, bottom).
-            max_shape (tuple): Shape of the image.
-
-        Returns:
-            Tensor: Decoded bboxes.
-        """
-        x1 = points[:, 0] - distance[:, 0]
-        y1 = points[:, 1] - distance[:, 1]
-        x2 = points[:, 0] + distance[:, 2]
-        y2 = points[:, 1] + distance[:, 3]
-        if max_shape is not None:
-            x1 = x1.clamp(min=0, max=max_shape[1])
-            y1 = y1.clamp(min=0, max=max_shape[0])
-            x2 = x2.clamp(min=0, max=max_shape[1])
-            y2 = y2.clamp(min=0, max=max_shape[0])
-        return np.stack([x1, y1, x2, y2], axis=-1)
-
-    def distance2kps(self, points, distance, max_shape=None):
-        """Decode distance prediction to bounding box.
-
-        Args:
-            points (Tensor): Shape (n, 2), [x, y].
-            distance (Tensor): Distance from the given point to 4
-                boundaries (left, top, right, bottom).
-            max_shape (tuple): Shape of the image.
-
-        Returns:
-            Tensor: Decoded bboxes.
-        """
-        preds = []
-        for i in range(0, distance.shape[1], 2):
-            px = points[:, i%2] + distance[:, i]
-            py = points[:, i%2+1] + distance[:, i+1]
-            if max_shape is not None:
-                px = px.clamp(min=0, max=max_shape[1])
-                py = py.clamp(min=0, max=max_shape[0])
-            preds.append(px)
-            preds.append(py)
-        return np.stack(preds, axis=-1)    
 
     def forward(self, img, score_thresh):
         self.time_engine.tic('forward_calc')
@@ -690,24 +750,26 @@ def onnx_eval(detector,
             prefix,
             eval=False,
             score_thresh=0.3,
-            nms_thresh=0.45,
             mode="640,640",
             image=None,
             out_path=None):
     if eval:
-        from tools import get_testloader, evaluation
         widerface_root = './data/widerface/'
-        split = 'val'
-        testloader = get_testloader(
-                mode='widerface',
-                split=split,
+        testloader = WIDERFace(
+                split='val',
                 root=widerface_root
         )
-        results = []
+        results = {}
         for idx in tqdm(range(len(testloader))):
-            img, mata = testloader[idx]
-            bboxes, kpss= detector.detect(img, score_thresh=score_thresh, mode=mode)#score_thresh=0.02 get the best mAP
-            results.append({'pred': bboxes, 'mata': mata})
+            img, event_name, img_name = testloader[idx]
+            xywhs, kpss= detector.detect(img, score_thresh=score_thresh, mode=mode)
+            w = xywhs[:,2] - xywhs[:,0]
+            h = xywhs[:,3] - xywhs[:,1]
+            xywhs[:,2] = w
+            xywhs[:,3] = h
+            if event_name not in results:
+                results[event_name] = {}
+            results[event_name][img_name] = xywhs
 
         run_epochs = detector.time_engine.container.get("forward_run").epochs
         print(f'Eval in {run_epochs}:')
@@ -716,16 +778,14 @@ def onnx_eval(detector,
         print(f'Total: {detector.time_engine.total_second() / run_epochs}')
         print(f'FPS: {run_epochs / detector.time_engine.total_second()}')
 
-        evaluation(mode='widerface',
-                    results=results,
-                    results_save_dir=f'./images/{prefix}_nms_{nms_thresh}_score_{score_thresh}_results',
-                    gt_root=osp.join(widerface_root, 'ground_truth'),
-                    iou_tresh=0.5,
-                    split=split)
+        aps = wider_evaluation(pred=results,
+                    gt_path=os.path.join(widerface_root, 'ground_truth'),
+                    iou_thresh=0.5)
+        print('APS:', aps)
 
 
     else:
-        assert image is None
+        assert image is not None
         img = cv2.imread(image)
         print(f'The origin shape is: {img.shape[:-1]}')
         warm_epochs = 10
@@ -744,7 +804,7 @@ def onnx_eval(detector,
         print(f'Total: {detector.time_engine.total_second() / run_epochs} ({t1 / run_epochs})')
         print(f'FPS: {run_epochs / detector.time_engine.total_second()} ({run_epochs / t1})')
 
-        draw(img, bboxes, kpss, out_path='./workspace/images/' + prefix + "_" + mode + osp.basename(image))
+        draw(img, bboxes, kpss, out_path=os.path.join(out_path, prefix + "_" + mode + os.path.basename(image)))
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -768,19 +828,22 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     model_file = args.model_file
-    assert osp.exists(model_file)
-    if osp.basename(model_file).lower().startswith('scrfd'):
+    assert os.path.exists(model_file)
+    if os.path.basename(model_file).lower().startswith('scrfd'):
         prefix = 'scrfd'
         detector = SCRFD(model_file, nms_thresh=args.nms_thresh)
-    elif osp.basename(model_file).lower().startswith('yunet'):
+    elif os.path.basename(model_file).lower().startswith('yunet'):
         prefix = 'yunet'
         detector = YUNET(model_file, nms_thresh=args.nms_thresh)
-    elif osp.basename(model_file).lower().startswith('yolo5face'):
+    elif os.path.basename(model_file).lower().startswith('yolo5face'):
         prefix = 'yolo5face'
         detector = YOLO5FACE(model_file, nms_thresh=args.nms_thresh)
-    elif osp.basename(model_file).lower().startswith('retinaface'):
+    elif os.path.basename(model_file).lower().startswith('retinaface'):
         prefix = 'retinaface'
         detector = RETINAFACE(model_file, nms_thresh=args.nms_thresh)
+    elif os.path.basename(model_file).lower().startswith('wwdet'):
+        prefix = 'wwdet'
+        detector = WWDET(model_file, nms_thresh=args.nms_thresh)
     else:
         raise ValueError('Unknown detector!')
     
@@ -788,7 +851,6 @@ if __name__ == "__main__":
                 prefix,
                 eval=args.eval,
                 score_thresh=args.score_thresh,
-                nms_thresh=args.nms_thresh,
                 mode=args.mode,
                 out_path='./work_dirs/sample/' )
 
