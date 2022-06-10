@@ -126,3 +126,5 @@ work_dirs/
 /wouts
 
 /wout
+
+/onnx

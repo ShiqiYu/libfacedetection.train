@@ -114,18 +114,29 @@ def main():
             # please comment the following line
             gt_bboxes = None
 
+        gt_kps = item.get('gt_keypointss', None)
+        kps_ignore = True
+        if kps_ignore:
+            kps = gt_kps[..., :-1]
+            kps_flag = np.mean(gt_kps[..., 2], axis=1, keepdims=True).squeeze(1) > 0
+            gt_kps = kps[kps_flag].reshape(-1, 2)
+        else:
+            # kps = kps[..., :-1].reshape(num_gt, -1)
+            assert "This dataset has kps ignore flag!"
         imshow_det_bboxes(
             item['img'],
             gt_bboxes,
             gt_labels,
             gt_masks,
+            gt_kps,
             class_names=dataset.CLASSES,
             show=not args.not_show,
             wait_time=args.show_interval,
             out_file=filename,
             bbox_color=dataset.PALETTE,
             text_color=(200, 200, 200),
-            mask_color=dataset.PALETTE)
+            mask_color=dataset.PALETTE,
+            kps_color=dataset.PALETTE)
 
         progress_bar.update()
 

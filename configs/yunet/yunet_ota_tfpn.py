@@ -1,14 +1,16 @@
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optimizer_config = dict(grad_clip=None)
-lr_mult = 8
 lr_config = dict(
-    policy='step',
+    policy='poly',
+    power=2.,
+    min_lr=1e-7,
     warmup='linear',
     warmup_iters=1500,
     warmup_ratio=0.001,
-    step=[55*lr_mult, 68*lr_mult])
-total_epochs = 80*lr_mult
-checkpoint_config = dict(interval=80)
+)
+runner = dict(type='EpochBasedRunner', max_epochs=1000)
+
+checkpoint_config = dict(interval=50)
 log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
@@ -157,15 +159,14 @@ model = dict(
         downsample_idx=[0, 2, 3, 4, 5],
         out_idx=[3, 4, 5, 6]),
     neck=dict(
-        type='WWHead_PAN',
+        type='WWHead_TFPN',
         in_channels=[64, 64, 64, 64],
-        lateral_channel=32,
         out_idx=[0, 1, 2, 3]),
     bbox_head=dict(
-        type='WWHead',
+        type='WWHead_OTA',
         num_classes=1,
-        in_channels=32,
-        stacked_convs_num=1,
+        in_channels=64,
+        stacked_convs_num=0,
         feat_channels=64,
         strides=[8, 16, 32, 64],
         loss_cls=dict(
@@ -194,9 +195,8 @@ model = dict(
     )    
 )
 epoch_multi = 1
-evaluation = dict(interval=200, metric='mAP')
+evaluation = dict(interval=250, metric='mAP')
 # custom_hooks = [
 #     dict(type='WWHook')
 # ]
-
 find_unused_parameters = True

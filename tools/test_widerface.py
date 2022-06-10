@@ -21,6 +21,8 @@ from mmdet.core.evaluation import wider_evaluation, get_widerface_gts
 
 from torchinfo import summary
 
+from auto_rank_result import AutoRank
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='MMDet test (and eval) a model')
@@ -47,7 +49,7 @@ def parse_args():
     parser.add_argument(
         '--thr',
         type=float,
-        default=0.02,
+        default=-1.,
         help='score threshold')
     parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument('--mode', type=int, default=0)
@@ -123,8 +125,8 @@ def main():
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=distributed,
         shuffle=False)
-
-    # cfg.test_cfg.score_thr = args.thr
+    if args.thr != -1.:
+        cfg.model.test_cfg.score_thr = args.thr
 
     # build the model and load checkpoint
     # model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
@@ -158,10 +160,7 @@ def main():
         img_metas = data['img_metas'][0].data[0][0]
         filepath = img_metas['ori_filename']
         det_scale = img_metas['scale_factor'][0]
-        #print(img_metas)
-        ori_shape = img_metas['ori_shape']
-        img_width = ori_shape[1]
-        img_height = ori_shape[0]
+
         _vec = filepath.split('/')
         pa, pb = _vec[-2], _vec[1]
         if pa not in results:
@@ -244,6 +243,14 @@ def main():
         for _ in range(batch_size):
             prog_bar.update()
     aps = wider_evaluation(results, gt_path, 0.5, args.debug)
+
+    AutoRank('./eval.log').update({
+        'config': args.config,
+        'weight': args.checkpoint,
+        'score_nms_thresh': [cfg.model.test_cfg.score_thr, cfg.model.test_cfg.nms.iou_threshold],
+        'APS': aps
+    })
+
     with open(os.path.join(output_folder, 'aps'), 'w') as f:
         f.write("%f,%f,%f\n"%(aps[0],aps[1],aps[2]))
     print('APS:', aps)

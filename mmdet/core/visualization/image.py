@@ -108,6 +108,27 @@ def draw_bboxes(ax, bboxes, color='g', alpha=0.8, thickness=2):
 
     return ax
 
+def draw_kps(ax, kps, color='g'):
+    """Draw bounding boxes on the axes.
+
+    Args:
+        ax (matplotlib.Axes): The input axes.
+        kps (ndarray): The input keypoints with the shape
+            of (n, 2).
+        color (list[tuple] | matplotlib.color): the colors for each
+            bounding boxes.
+        alpha (float): Transparency of bounding boxes. Default: 0.8.
+        radius (int): Radius of points. Default: 1.
+
+    Returns:
+        matplotlib.Axes: The result axes.
+    """
+    kps_int = kps.astype(np.int32)
+
+    ax.scatter(kps_int[:, 0], kps_int[:, 1], c=color/255, marker='.')
+
+
+    return ax
 
 def draw_labels(ax,
                 labels,
@@ -207,11 +228,13 @@ def imshow_det_bboxes(img,
                       bboxes=None,
                       labels=None,
                       segms=None,
+                      kps=None,
                       class_names=None,
                       score_thr=0,
                       bbox_color='green',
                       text_color='green',
                       mask_color=None,
+                      kps_color=None,
                       thickness=2,
                       font_size=8,
                       win_name='',
@@ -226,6 +249,7 @@ def imshow_det_bboxes(img,
             (n, 5).
         labels (ndarray): Labels of bboxes.
         segms (ndarray | None): Masks, shaped (n,h,w) or None.
+        kps (ndarray | None): keypoints, shape(n,cx,cy) or None.
         class_names (list[str]): Names of each classes.
         score_thr (float): Minimum score of bboxes to be shown. Default: 0.
         bbox_color (list[tuple] | tuple | str | None): Colors of bbox lines.
@@ -261,6 +285,7 @@ def imshow_det_bboxes(img,
         'segms.shape[0] and labels.shape[0] should have the same length.'
     assert segms is not None or bboxes is not None, \
         'segms and bboxes should not be None at the same time.'
+    # assert kps is None or kps.shape[0] == labels.shape[0], \
 
     img = mmcv.imread(img).astype(np.uint8)
 
@@ -345,7 +370,13 @@ def imshow_det_bboxes(img,
                 font_size=font_size,
                 scales=scales,
                 horizontal_alignment=horizontal_alignment)
-
+    if kps is not None:
+        kps_palette = get_palette(kps_color, max_label + 1)
+        # colors = [kps_palette[label] for label in labels]
+        # colors = np.array(colors, dtype=np.uint8)
+        color = kps_palette[0]
+        color = np.array(color, dtype=np.uint8)
+        draw_kps(ax, kps, color)
     plt.imshow(img)
 
     stream, _ = canvas.print_to_buffer()
@@ -522,3 +553,5 @@ def imshow_gt_det_bboxes(img,
         wait_time=wait_time,
         out_file=out_file)
     return img
+
+
