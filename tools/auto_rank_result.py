@@ -49,12 +49,10 @@ class AutoRank(object):
         assert len(aps) == 3
         tmp_content['APS'] = aps
 
-
-
         self.content.append(tmp_content)
     
     def sort_content(self, reverse=True):
-        pass
+        self.content.sort(key=lambda x: x['APS'][2], reverse=reverse)
 
     def store_content(self):
         s = ""
@@ -74,4 +72,6 @@ class AutoRank(object):
 
 if __name__ == "__main__":
     x = AutoRank('./eval.log')
-    x.update({'config': "dasdasda", 'weight': "dfghdfghdfh", 'APS': [231, 231, 22], 'score_nms_thresh':[0.3, 0.45]})
+    x.update()
+
+    # x.update({'config': "dasdasda", 'weight': "dfghdfghdfh", 'APS': [231, 231, 22], 'score_nms_thresh':[0.3, 0.45]})
