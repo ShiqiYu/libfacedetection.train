@@ -42,6 +42,7 @@ from .yolox_head import YOLOXHead
 from .yunet_head import WWHead
 from .yunet_head_gfl import WWHead_GFL
 from .yunet_head_ota import WWHead_OTA
+from .scrfd_head import SCRFDHead
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
     'RPNHead', 'GARPNHead', 'RetinaHead', 'RetinaSepBNHead', 'GARetinaHead',
@@ -54,5 +55,5 @@ __all__ = [
     'AutoAssignHead', 'DETRHead', 'YOLOFHead', 'DeformableDETRHead',
     'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 'LADHead', 'TOODHead', 'MaskFormerHead',
-    'Mask2FormerHead', 'WWHead', 'WWHead_GFL', 'WWHead_OTA'
+    'Mask2FormerHead', 'WWHead', 'WWHead_GFL', 'WWHead_OTA', 'SCRFDHead'
 ]
