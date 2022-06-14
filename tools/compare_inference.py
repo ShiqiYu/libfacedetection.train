@@ -11,7 +11,8 @@ from itertools import product as product
 import torch.utils.data as data
 import scipy
 from mmdet.core.evaluation import wider_evaluation
-
+import math
+import torch
 
 def softmax(z):
     assert len(z.shape) == 2
@@ -21,6 +22,10 @@ def softmax(z):
     div = np.sum(e_x, axis=1)
     div = div[:, np.newaxis] # dito
     return e_x / div
+
+def sigmoid(x):
+    sig = np.where(x < 0, np.exp(x)/(1 + np.exp(x)), 1/(1 + np.exp(-x)))
+    return sig
 
 def nms(dets, thresh, opencv_mode=True):
     if opencv_mode:
@@ -68,7 +73,7 @@ def nms(dets, thresh, opencv_mode=True):
 
     return keep
 
-def distance2bbox(self, points, distance, max_shape=None):
+def distance2bbox(points, distance, max_shape=None):
     """Decode distance prediction to bounding box.
 
     Args:
@@ -85,13 +90,13 @@ def distance2bbox(self, points, distance, max_shape=None):
     x2 = points[:, 0] + distance[:, 2]
     y2 = points[:, 1] + distance[:, 3]
     if max_shape is not None:
-        x1 = x1.clamp(min=0, max=max_shape[1])
-        y1 = y1.clamp(min=0, max=max_shape[0])
-        x2 = x2.clamp(min=0, max=max_shape[1])
-        y2 = y2.clamp(min=0, max=max_shape[0])
+        x1 = x1.clip(min=0, max=max_shape[1])
+        y1 = y1.clip(min=0, max=max_shape[0])
+        x2 = x2.clip(min=0, max=max_shape[1])
+        y2 = y2.clip(min=0, max=max_shape[0])
     return np.stack([x1, y1, x2, y2], axis=-1)
 
-def distance2kps(self, points, distance, max_shape=None):
+def distance2kps(points, distance, max_shape=None):
     """Decode distance prediction to bounding box.
 
     Args:
@@ -297,6 +302,142 @@ class Detector:
         pass
     def detect(self, img, score_thresh=0.5, mode="ORIGIN"):
         pass
+class WWDET(Detector):
+    def __init__(self, model_file=None, nms_thresh=0.5) -> None:
+        super().__init__(model_file, nms_thresh)
+        self.taskname = 'wwdet'
+        self.priors_cache = {}
+        self.strides = [8, 16, 32, 64]
+
+    def get_single_level_center_priors(
+        self, featmap_size, stride, dtype
+    ):
+        """Generate centers of a single stage feature map.
+        Args:
+            batch_size (int): Number of images in one batch.
+            featmap_size (tuple[int]): height and width of the feature map
+            stride (int): down sample stride of the feature map
+            dtype (obj:`torch.dtype`): data type of the tensors
+            device (obj:`torch.device`): device of the tensors
+        Return:
+            priors (Tensor): center priors of a single level feature map.
+        """
+        h, w = featmap_size
+        x_range = (np.arange(w, dtype=dtype)) * stride
+        y_range = (np.arange(h, dtype=dtype)) * stride
+
+        # notice!!! in torch: y, x = np.meshgrid(y_range, x_range)
+        x, y = np.meshgrid(y_range, x_range)
+        y = y.flatten()
+        x = x.flatten()
+        strides = np.full((x.shape[0],), stride, dtype=dtype)
+        proiors = np.stack([x, y, strides, strides], axis=-1)
+        return proiors
+
+    def get_single_level_center_priors_torch(
+        self, batch_size, featmap_size, stride, dtype, device
+    ):
+        """Generate centers of a single stage feature map.
+        Args:
+            batch_size (int): Number of images in one batch.
+            featmap_size (tuple[int]): height and width of the feature map
+            stride (int): down sample stride of the feature map
+            dtype (obj:`torch.dtype`): data type of the tensors
+            device (obj:`torch.device`): device of the tensors
+        Return:
+            priors (Tensor): center priors of a single level feature map.
+        """
+        h, w = featmap_size
+        x_range = (torch.arange(w, dtype=dtype, device=device)) * stride
+        y_range = (torch.arange(h, dtype=dtype, device=device)) * stride
+        y, x = torch.meshgrid(y_range, x_range)
+        y = y.flatten()
+        x = x.flatten()
+        strides = x.new_full((x.shape[0],), stride)
+        proiors = torch.stack([x, y, strides, strides], dim=-1)
+        return proiors.unsqueeze(0).repeat(batch_size, 1, 1)
+
+    def forward(self, img, score_thresh):
+        self.time_engine.tic('forward_calc')
+
+        input_size = tuple(img.shape[0:2][::-1])
+        blob = cv2.dnn.blobFromImage(img, 1.0/128, input_size, (127.5, 127.5, 127.5), swapRB=True)
+        self.time_engine.toc('forward_calc')
+
+        self.time_engine.tic('forward_run')
+        bbox_preds, kps_preds, cls_preds = self.session.run(None, {self.session.get_inputs()[0].name: blob})
+        bbox_preds = bbox_preds.squeeze(0)
+        kps_preds = kps_preds.squeeze(0)
+        cls_preds = cls_preds.reshape(-1)
+        self.time_engine.toc('forward_run')
+
+        self.time_engine.tic('forward_calc_1')
+        featmap_sizes = [
+            (math.floor(input_size[0] / stride), math.floor(input_size[1] / stride))
+            for stride in self.strides
+        ]
+        mlvl_center_priors = [
+            self.get_single_level_center_priors(
+                featmap_sizes[i],
+                stride,
+                dtype=np.float32,
+            )
+            for i, stride in enumerate(self.strides)
+        ]
+        center_priors = np.vstack(mlvl_center_priors)
+
+        bboxes = distance2bbox(center_priors[:, :2], bbox_preds * center_priors[:, 2, None], max_shape=input_size)
+
+# 
+        # featmap_sizes = [
+        #     (math.floor(input_size[0] / stride), math.floor(input_size[1] / stride))
+        #     for stride in self.strides
+        # ]
+
+        # # get grid cells of batch image [batch, N, 4]
+        # mlvl_center_priors = [
+        #     self.get_single_level_center_priors_torch(
+        #         1,
+        #         featmap_sizes[i],
+        #         stride,
+        #         dtype=torch.float32,
+        #         device='cpu',
+        #     )
+        #     for i, stride in enumerate(self.strides)
+        # ]
+        # center_priors_torch = torch.cat(mlvl_center_priors, dim=1)
+        # # np.testing.assert_allclose(torch_out.detach().numpy(), ort_out, rtol=1e-03, atol=1e-05)
+        # bboxes_torch = distance2bbox(center_priors_torch[..., :2], bbox_preds * center_priors_torch[..., 2, None], max_shape=input_size)
+# 
+
+
+
+
+        kps = distance2kps(center_priors[:, :2], kps_preds * center_priors[:, 2, None])
+        scores = sigmoid(cls_preds)
+        score_mask = scores > score_thresh
+        bboxes = bboxes[score_mask]
+        scores = scores[score_mask]
+        kps = kps[score_mask]
+        self.time_engine.toc('forward_calc_1')
+        return bboxes, scores, kps
+
+    def detect(self, img, score_thresh=0.5, mode="ORIGIN"):
+        self.time_engine.tic('preprocess')
+        det_img, det_scale = resize_img(img, mode)
+        self.time_engine.toc('preprocess')
+
+        bboxes, scores, kps = self.forward(det_img, score_thresh)
+
+        self.time_engine.tic('postprocess')
+        bboxes /= det_scale
+        kps /= det_scale
+        pre_det = np.hstack((bboxes, scores[:, None]))
+        keep = nms(pre_det, self.nms_thresh)
+        kps = kps[keep, :]
+        bboxes = pre_det[keep, :]
+        self.time_engine.toc('postprocess')
+        return bboxes, kps
 
 class SCRFD(Detector):
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:
@@ -342,9 +483,6 @@ class SCRFD(Detector):
             self._feat_stride_fpn = [8, 16, 32, 64, 128]
             self._num_anchors = 1
             self.use_kps = True 
-
-    def preprocess(self, img):
-        pass
 
     def forward(self, img, score_thresh):
         self.time_engine.tic('forward_calc')
@@ -769,7 +907,7 @@ def onnx_eval(detector,
             xywhs[:,3] = h
             if event_name not in results:
                 results[event_name] = {}
-            results[event_name][img_name] = xywhs
+            results[event_name][img_name.rstrip('.jpg')] = xywhs
 
         run_epochs = detector.time_engine.container.get("forward_run").epochs
         print(f'Eval in {run_epochs}:')
@@ -788,11 +926,11 @@ def onnx_eval(detector,
         assert image is not None
         img = cv2.imread(image)
         print(f'The origin shape is: {img.shape[:-1]}')
-        warm_epochs = 10
+        warm_epochs = 1
         for _ in range(warm_epochs):        
             bboxes, kpss = detector.detect(img, score_thresh=score_thresh, mode=mode)
         detector.time_engine.reset()
-        run_epochs = 500
+        run_epochs = 1
         t0 = time()
         for _ in range(run_epochs):        
             bboxes, kpss = detector.detect(img, score_thresh=score_thresh, mode=mode)
@@ -852,6 +990,7 @@ if __name__ == "__main__":
                 eval=args.eval,
                 score_thresh=args.score_thresh,
                 mode=args.mode,
+                image=args.image,
                 out_path='./work_dirs/sample/' )
 
 

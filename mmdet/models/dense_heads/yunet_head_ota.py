@@ -169,6 +169,11 @@ class WWHead_OTA(nn.Module):
         cls_preds = torch.cat(cls_preds_list, dim=-1).permute(0, 2, 1)
         bbox_preds = torch.cat(bbox_preds_list, dim=-1).permute(0, 2, 1)
         kps_preds = torch.cat(kps_preds_list, dim=-1).permute(0, 2, 1)
+        
+        if torch.onnx.is_in_onnx_export():
+            # return (bbox_preds, cls_preds, kps_preds)
+            # return (bbox_preds, kps_preds, cls_preds)
+            pass
         return (bbox_preds, kps_preds, cls_preds)
 
     def forward_train(self,
