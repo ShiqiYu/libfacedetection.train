@@ -81,7 +81,8 @@ class Resize:
                  bbox_clip_border=True,
                  backend='cv2',
                  interpolation='bilinear',
-                 override=False):
+                 override=False,
+                 ):
         if img_scale is None:
             self.img_scale = None
         else:
@@ -96,7 +97,7 @@ class Resize:
             assert len(self.img_scale) == 1
         else:
             # mode 2: given multiple scales or a range of scales
-            assert multiscale_mode in ['value', 'range']
+            assert multiscale_mode in ['value', 'range', 'square_range']
 
         self.backend = backend
         self.multiscale_mode = multiscale_mode
@@ -124,6 +125,32 @@ class Resize:
         scale_idx = np.random.randint(len(img_scales))
         img_scale = img_scales[scale_idx]
         return img_scale, scale_idx
+
+    @staticmethod
+    def random_sample_square(img_scales):
+        """Randomly sample an img_scale when ``multiscale_mode=='range'``.
+
+        Args:
+            img_scales (list[tuple]): Images scale range for sampling.
+                There must be two tuples in img_scales, which specify the lower
+                and upper bound of image scales.
+
+        Returns:
+            (tuple, None): Returns a tuple ``(img_scale, None)``, where \
+                ``img_scale`` is sampled scale and None is just a placeholder \
+                to be consistent with :func:`random_select`.
+        """
+
+        assert mmcv.is_list_of(img_scales, tuple) and len(img_scales) == 1
+        img_scale_high = max(img_scales[0])
+        img_scale_low = min(img_scales[0])
+        out_edge = np.random.randint(
+            img_scale_low,
+            img_scale_high + 1)
+        out_edge = out_edge // 32 * 32
+        img_scale = (out_edge, out_edge)
+        return img_scale, None
+
 
     @staticmethod
     def random_sample(img_scales):
@@ -201,7 +228,10 @@ class Resize:
             scale, scale_idx = self.random_sample_ratio(
                 self.img_scale[0], self.ratio_range)
         elif len(self.img_scale) == 1:
-            scale, scale_idx = self.img_scale[0], 0
+            if self.multiscale_mode == 'square_range':
+                scale, scale_idx = self.random_sample_square(self.img_scale)
+            else:
+                scale, scale_idx = self.img_scale[0], 0
         elif self.multiscale_mode == 'range':
             scale, scale_idx = self.random_sample(self.img_scale)
         elif self.multiscale_mode == 'value':

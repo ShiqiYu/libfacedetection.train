@@ -388,28 +388,6 @@ class WWDET(Detector):
 
         bboxes = distance2bbox(center_priors[:, :2], bbox_preds * center_priors[:, 2, None], max_shape=input_size)
 
-# 
-        # featmap_sizes = [
-        #     (math.floor(input_size[0] / stride), math.floor(input_size[1] / stride))
-        #     for stride in self.strides
-        # ]
-
-        # # get grid cells of batch image [batch, N, 4]
-        # mlvl_center_priors = [
-        #     self.get_single_level_center_priors_torch(
-        #         1,
-        #         featmap_sizes[i],
-        #         stride,
-        #         dtype=torch.float32,
-        #         device='cpu',
-        #     )
-        #     for i, stride in enumerate(self.strides)
-        # ]
-        # center_priors_torch = torch.cat(mlvl_center_priors, dim=1)
-        # # np.testing.assert_allclose(torch_out.detach().numpy(), ort_out, rtol=1e-03, atol=1e-05)
-        # bboxes_torch = distance2bbox(center_priors_torch[..., :2], bbox_preds * center_priors_torch[..., 2, None], max_shape=input_size)
-# 
-
 
 
 
