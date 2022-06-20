@@ -81,8 +81,7 @@ class Resize:
                  bbox_clip_border=True,
                  backend='cv2',
                  interpolation='bilinear',
-                 override=False,
-                 ):
+                 override=False):
         if img_scale is None:
             self.img_scale = None
         else:
