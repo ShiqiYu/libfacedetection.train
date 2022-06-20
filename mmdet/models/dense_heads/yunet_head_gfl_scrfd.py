@@ -21,7 +21,7 @@ import os
 import math
 
 @HEADS.register_module()
-class WWHead_GFL(nn.Module):
+class WWHead_GFL_SCRFD(nn.Module):
     """Generalized Focal Loss: Learning Qualified and Distributed Bounding
     Boxes for Dense Object Detection.
 
@@ -66,7 +66,7 @@ class WWHead_GFL(nn.Module):
                 anchor_generator=None,
                 train_cfg=None,
                 test_cfg=None):
-        super(WWHead_GFL, self).__init__()
+        super(WWHead_GFL_SCRFD, self).__init__()
         self.stacked_convs_num = stacked_convs_num
         self.extra_flops = 0.0
         self.use_kps = use_kps
@@ -84,7 +84,6 @@ class WWHead_GFL(nn.Module):
 
         self.prior_generator = build_prior_generator(anchor_generator)
         self.strides_num = len(self.prior_generator.strides)
-        self.num_priors = self.prior_generator.num_base_priors[0]
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.loss_kps = build_loss(loss_kps)
@@ -105,10 +104,10 @@ class WWHead_GFL(nn.Module):
                 for _ in range(self.stacked_convs_num - 1):
                     stack_conv.append(ConvDPUnit(self.feat_channels, self.feat_channels))    
                 self.stacked_convs.append(nn.Sequential(*stack_conv))
-            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.num_classes * self.num_priors, False))
-            self.bbox_convs.append(ConvDPUnit(self.feat_channels, 4 * self.num_priors, False))
+            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.num_classes, False))
+            self.bbox_convs.append(ConvDPUnit(self.feat_channels, 4, False))
             if self.use_kps:
-                self.kps_convs.append(ConvDPUnit(self.feat_channels, self.NK * 2 * self.num_priors, False))
+                self.kps_convs.append(ConvDPUnit(self.feat_channels, self.NK * 2, False))
         self.init_weights()
 
     def init_weights(self):
@@ -155,21 +154,16 @@ class WWHead_GFL(nn.Module):
             cls_pred = self.cls_convs[i](x)
             bbox_pred = self.bbox_convs[i](x)
 
-            cls_preds_list.append(cls_pred)
-            bbox_preds_list.append(bbox_pred)
+            cls_preds_list.append(cls_pred.flatten(start_dim=2).permute(0, 2, 1))
+            bbox_preds_list.append(bbox_pred.flatten(start_dim=2).permute(0, 2, 1))
             if self.use_kps:
                 kps_pred = self.kps_convs[i](x)
             else:
                 kps_pred = bbox_pred.new_zeros(\
-                    (bbox_pred.shape[0], self.NK * 2 * self.num_priors, bbox_pred.shape[2], bbox_pred.shape[3]))
-            kps_preds_list.append(kps_pred)
+                    (bbox_pred.shape[0], self.NK*2, bbox_pred.shape[1], bbox_pred.shape[1]))
+            kps_preds_list.append(kps_pred.flatten(start_dim=2).permute(0, 2, 1))
 
         if torch.onnx.is_in_onnx_export():
-            # batch_size = cls_score.shape[0]
-            # cls_score = cls_score.permute(0, 2, 3, 1).reshape(batch_size, -1, self.cls_out_channels).sigmoid()
-            # bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4)
-            # kps_pred = kps_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 10)
-            # TODO
             pass
         
         return cls_preds_list, bbox_preds_list, kps_preds_list
@@ -245,8 +239,8 @@ class WWHead_GFL(nn.Module):
         assert stride[0] == stride[1], 'h stride is not equal to w stride!'
         use_qscore = True
         anchors = anchors.reshape(-1, 4)
-        cls_score = cls_score.permute(0, 2, 3, 1).reshape(-1, self.num_classes)
-        bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
+
+        cls_score = cls_score.reshape(-1, self.num_classes)
         bbox_targets = bbox_targets.reshape(-1, 4)
         bbox_pred = bbox_pred.reshape(-1, 4)
         assert cls_score.shape[0] == bbox_pred.shape[0]
@@ -256,7 +250,7 @@ class WWHead_GFL(nn.Module):
         if self.use_kps:
             kps_targets = kps_targets.reshape( (-1, self.NK*2) )
             kps_weights = kps_weights.reshape( (-1, self.NK*2) )
-            kps_pred = kps_pred.permute(0, 2, 3, 1).reshape(-1, self.NK*2)
+            kps_pred = kps_pred.reshape(-1, self.NK*2)
 
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
@@ -556,11 +550,11 @@ class WWHead_GFL(nn.Module):
                 cls_scores, bbox_preds, self.prior_generator.strides,
                 mlvl_anchors):
             assert stride[0] == stride[1]
-            assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
-            scores = cls_score.permute(1, 2, 0).reshape(
-                -1, self.num_classes).sigmoid()
-            bbox_pred = bbox_pred.permute(1, 2, 0).reshape( (-1,4) ) * stride[0]
+            scores = cls_score.sigmoid()
+
+            bbox_pred = bbox_pred * stride[0]
+
             nms_pre = cfg.get('nms_pre', -1)
             if nms_pre > 0 and scores.shape[0] > nms_pre:
                 max_scores, _ = scores.max(dim=1)

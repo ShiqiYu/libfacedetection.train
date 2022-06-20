@@ -526,13 +526,13 @@ class SCRFD(Detector):
                     self.center_cache[key] = anchor_centers
 
             pos_inds = np.where(scores >= score_thresh)[0]
-            bboxes = self.distance2bbox(anchor_centers, bbox_preds)
+            bboxes = distance2bbox(anchor_centers, bbox_preds)
             pos_scores = scores[pos_inds]
             pos_bboxes = bboxes[pos_inds]
             scores_list.append(pos_scores)
             bboxes_list.append(pos_bboxes)
             if self.use_kps:
-                kpss = self.distance2kps(anchor_centers, kps_preds)
+                kpss = distance2kps(anchor_centers, kps_preds)
                 #kpss = kps_preds
                 kpss = kpss.reshape( (kpss.shape[0], -1, 2) )
                 pos_kpss = kpss[pos_inds]
