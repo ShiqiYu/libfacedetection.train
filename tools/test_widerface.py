@@ -52,7 +52,14 @@ def parse_args():
         default=-1.,
         help='score threshold')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--mode', type=int, default=0)
+    parser.add_argument('--mode', type=int, default=0,
+            help="""
+            mode    test resolution
+            0       (640, 640)
+            1       (1100, 1650)
+            2       Origin Size diveisor=32
+            >30     (mode, mode)             
+            """)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
