@@ -123,9 +123,9 @@ def parse_args():
         '--shape',
         type=int,
         nargs='+',
-        default=[640, 640],
+        # default=[640, 640],
         #default=[384, 384],
-        # default=[-1, -1],
+        default=[-1, -1],
         help='input image size')
     parser.add_argument(
         '--mean',
