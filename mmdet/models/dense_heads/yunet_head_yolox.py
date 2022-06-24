@@ -377,6 +377,23 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
         encoded_kps = torch.cat(encoded_kps, -1)           
         return encoded_kps
 
+    def _bbox_decode_kps_encode(self, priors, bbox_preds, kps):
+        xys = (bbox_preds[..., :2] * priors[..., 2:]) + priors[..., :2]
+        whs = bbox_preds[..., 2:].exp() * priors[..., 2:]
+
+        tl_x = (xys[..., 0] - whs[..., 0] / 2)
+        tl_y = (xys[..., 1] - whs[..., 1] / 2)
+        br_x = (xys[..., 0] + whs[..., 0] / 2)
+        br_y = (xys[..., 1] + whs[..., 1] / 2)
+
+        decoded_bboxes = torch.stack([tl_x, tl_y, br_x, br_y], -1)
+        num_points = int(kps.shape[-1] / 2)        
+        encoded_kps = [(kps[..., [i, i+1]] - xys[..., :]) / whs[..., :] \
+            for i in range(num_points)]
+
+        return (decoded_bboxes, encoded_kps)
+
+
     def _bboxes_nms(self, cls_scores, bboxes, score_factor, cfg):
         max_scores, labels = torch.max(cls_scores, 1)
         valid_mask = score_factor * max_scores >= cfg.score_thr
