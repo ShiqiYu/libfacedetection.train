@@ -1,5 +1,8 @@
 from mmcv.runner.hooks import HOOKS, Hook
 import json
+from datetime import datetime
+import os
+
 @HOOKS.register_module()
 class YuNetSampleSizeStatisticsHook(Hook):
     def __init__(self, out_file, save_interval=50) -> None:
@@ -11,6 +14,10 @@ class YuNetSampleSizeStatisticsHook(Hook):
         self.total_sample_num = 0
         self.save_interval = save_interval
         self.batch_size = 0
+
+    def before_run(self, runner):
+        work_dir = runner.work_dir
+        self.out_file = os.path.join(work_dir, self.out_file)
 
     def before_epoch(self, runner):
         self.epoch = runner.epoch
@@ -39,6 +46,7 @@ class YuNetSampleSizeStatisticsHook(Hook):
     def dump_json(self):
         with open(self.out_file, 'w') as f:
             json.dump({
+                "datetime:": str(datetime.now()),
                 "Batch_size": self.batch_size,
                 "Total_sample": self.total_sample_num,
                 "Noimg": self.noimg,
