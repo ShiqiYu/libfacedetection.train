@@ -2265,7 +2265,8 @@ class Mosaic:
                  bbox_clip_border=True,
                  skip_filter=True,
                  pad_val=114,
-                 prob=1.0):
+                 prob=1.0,
+                 use_kps=False):
         assert isinstance(img_scale, tuple)
         assert 0 <= prob <= 1.0, 'The probability should be in range [0,1]. '\
             f'got {prob}.'
@@ -2278,6 +2279,7 @@ class Mosaic:
         self.skip_filter = skip_filter
         self.pad_val = pad_val
         self.prob = prob
+        self.use_kps = use_kps
 
     def __call__(self, results):
         """Call function to make a mosaic of image.
@@ -2321,6 +2323,8 @@ class Mosaic:
         assert 'mix_results' in results
         mosaic_labels = []
         mosaic_bboxes = []
+        if self.use_kps:
+            mosaic_kpss= []
         if len(results['img'].shape) == 3:
             mosaic_img = np.full(
                 (int(self.img_scale[0] * 2), int(self.img_scale[1] * 2), 3),
@@ -2366,7 +2370,8 @@ class Mosaic:
             # adjust coordinate
             gt_bboxes_i = results_patch['gt_bboxes']
             gt_labels_i = results_patch['gt_labels']
-
+            if self.use_kps:
+                gt_kpss_i = results_patch['gt_keypointss']
             if gt_bboxes_i.shape[0] > 0:
                 padw = x1_p - x1_c
                 padh = y1_p - y1_c
@@ -2374,29 +2379,50 @@ class Mosaic:
                     scale_ratio_i * gt_bboxes_i[:, 0::2] + padw
                 gt_bboxes_i[:, 1::2] = \
                     scale_ratio_i * gt_bboxes_i[:, 1::2] + padh
+                if self.use_kps:
+                    gt_kpss_i[:, :, 0] = \
+                        scale_ratio_i * gt_kpss_i[:, :, 0] + padw
+                    gt_kpss_i[:, :, 1] = \
+                        scale_ratio_i * gt_kpss_i[:, :, 1] + padh
+
 
             mosaic_bboxes.append(gt_bboxes_i)
             mosaic_labels.append(gt_labels_i)
-
+            if self.use_kps:
+                mosaic_kpss.append(gt_kpss_i)
         if len(mosaic_labels) > 0:
             mosaic_bboxes = np.concatenate(mosaic_bboxes, 0)
             mosaic_labels = np.concatenate(mosaic_labels, 0)
-
+            if self.use_kps:
+                mosaic_kpss = np.concatenate(mosaic_kpss, 0)
             if self.bbox_clip_border:
                 mosaic_bboxes[:, 0::2] = np.clip(mosaic_bboxes[:, 0::2], 0,
                                                  2 * self.img_scale[1])
                 mosaic_bboxes[:, 1::2] = np.clip(mosaic_bboxes[:, 1::2], 0,
                                                  2 * self.img_scale[0])
+                if self.use_kps:
+                    mosaic_kpss[..., 0] = np.clip(mosaic_kpss[..., 0], 0,
+                                                    2 * self.img_scale[1])
+                    mosaic_kpss[..., 1] = np.clip(mosaic_kpss[..., 1], 0,
+                                                    2 * self.img_scale[0])                    
+                    
 
+            # TODO kps skip filter
             if not self.skip_filter:
-                mosaic_bboxes, mosaic_labels = \
-                    self._filter_box_candidates(mosaic_bboxes, mosaic_labels)
-
+                valid_inds = \
+                    self._filter_box_candidates(mosaic_bboxes)
+                mosaic_bboxes, mosaic_labels = mosaic_bboxes[valid_inds], mosaic_labels[valid_inds]
+                if self.use_kps:
+                    mosaic_kpss = mosaic_kpss[valid_inds]
         # remove outside bboxes
         inside_inds = find_inside_bboxes(mosaic_bboxes, 2 * self.img_scale[0],
                                          2 * self.img_scale[1])
         mosaic_bboxes = mosaic_bboxes[inside_inds]
         mosaic_labels = mosaic_labels[inside_inds]
+        if self.use_kps:
+            mosaic_kpss = mosaic_kpss[inside_inds]
+            results['gt_keypointss'] = mosaic_kpss
+
 
         results['img'] = mosaic_img
         results['img_shape'] = mosaic_img.shape
@@ -2466,14 +2492,14 @@ class Mosaic:
         paste_coord = x1, y1, x2, y2
         return paste_coord, crop_coord
 
-    def _filter_box_candidates(self, bboxes, labels):
+    def _filter_box_candidates(self, bboxes):
         """Filter out bboxes too small after Mosaic."""
         bbox_w = bboxes[:, 2] - bboxes[:, 0]
         bbox_h = bboxes[:, 3] - bboxes[:, 1]
         valid_inds = (bbox_w > self.min_bbox_size) & \
                      (bbox_h > self.min_bbox_size)
         valid_inds = np.nonzero(valid_inds)[0]
-        return bboxes[valid_inds], labels[valid_inds]
+        return valid_inds
 
     def __repr__(self):
         repr_str = self.__class__.__name__
