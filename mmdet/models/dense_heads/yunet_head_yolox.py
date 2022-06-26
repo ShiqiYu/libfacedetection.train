@@ -89,6 +89,7 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
                 #      distribution='uniform',
                 #      mode='fan_in',
                 #      nonlinearity='leaky_relu')
+                kps_mode="KpsFromPrior"
                 ):
 
         super().__init__()
@@ -101,7 +102,9 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
         self.use_sigmoid_cls = True
         self.use_kps = use_kps
         self.shared_stack_convs = shared_stacked_convs
-        
+
+        assert kps_mode in ("KpsFromBbox", "KpsFromPrior")
+        self.kps_mode = kps_mode
 
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
@@ -370,28 +373,25 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
             for i in range(num_points)], -1)           
         return decoded_kps
 
-    def _kps_encode(self, priors, kps):
+    def _kps_encode_with_prior(self, priors, kps):
         num_points = int(kps.shape[-1] / 2)        
         encoded_kps = [(kps[..., [i, i+1]] - priors[..., :2]) / priors[..., 2:] \
             for i in range(num_points)]
         encoded_kps = torch.cat(encoded_kps, -1)           
         return encoded_kps
 
-    def _bbox_decode_kps_encode(self, priors, bbox_preds, kps):
+    def _kps_encode_with_bbox(self, priors, bbox_preds, kps):
         xys = (bbox_preds[..., :2] * priors[..., 2:]) + priors[..., :2]
         whs = bbox_preds[..., 2:].exp() * priors[..., 2:]
 
-        tl_x = (xys[..., 0] - whs[..., 0] / 2)
-        tl_y = (xys[..., 1] - whs[..., 1] / 2)
-        br_x = (xys[..., 0] + whs[..., 0] / 2)
-        br_y = (xys[..., 1] + whs[..., 1] / 2)
-
-        decoded_bboxes = torch.stack([tl_x, tl_y, br_x, br_y], -1)
-        num_points = int(kps.shape[-1] / 2)        
+        num_points = int(kps.shape[-1] / 2)   
+     
         encoded_kps = [(kps[..., [i, i+1]] - xys[..., :]) / whs[..., :] \
             for i in range(num_points)]
 
-        return (decoded_bboxes, encoded_kps)
+
+        encoded_kps = torch.cat(encoded_kps, -1)         
+        return encoded_kps
 
 
     def _bboxes_nms(self, cls_scores, bboxes, score_factor, cfg):
@@ -471,6 +471,7 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
 
         flatten_priors = torch.cat(mlvl_priors).unsqueeze(0).repeat(num_imgs, 1, 1)
         flatten_bboxes = self._bbox_decode(flatten_priors, flatten_bbox_preds)
+        # flatten_bboxes, kps
 
         (pos_masks, cls_targets, obj_targets, bbox_targets, l1_targets, kps_targets, kps_weights,
          num_fg_imgs) = multi_apply(
@@ -505,12 +506,17 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
             flatten_cls_preds.view(-1, self.num_classes)[pos_masks],
             cls_targets) / num_total_samples
 
-        encoded_kpss = self._kps_encode(flatten_priors.view(-1, 4)[pos_masks], kps_targets)
-        loss_kps = self.loss_kps(flatten_kps_preds.view(-1, self.NK * 2)[pos_masks], 
-                                encoded_kpss,
-                                weight=kps_weights.view(-1, 1),
-                                # reduction_override='sum',
-                                avg_factor=torch.sum(kps_weights))
+        if self.use_kps:
+            if self.kps_mode == "KpsFromPrior":
+                encoded_kpss = self._kps_encode_with_prior(flatten_priors.view(-1, 4)[pos_masks], kps_targets)
+            else:
+                encoded_kpss = self._kps_encode_with_bbox(flatten_priors.view(-1, 4)[pos_masks], flatten_bbox_preds.view(-1, 4)[pos_masks], kps_targets)
+                
+            loss_kps = self.loss_kps(flatten_kps_preds.view(-1, self.NK * 2)[pos_masks], 
+                                    encoded_kpss,
+                                    weight=kps_weights.view(-1, 1),
+                                    # reduction_override='sum',
+                                    avg_factor=torch.sum(kps_weights))
         loss_dict = dict(
             loss_cls=loss_cls, loss_bbox=loss_bbox, loss_obj=loss_obj, loss_kps = loss_kps)
 
