@@ -216,8 +216,8 @@ model = dict(
     
     ))
 evaluation = dict(interval=1001, metric='mAP')
-# custom_hooks = [
-#     dict(type='WWHook')
-# ]
+custom_hooks = [
+    dict(type='YuNetSampleSizeStatisticsHook', out_file='sample_statics.json', save_interval=50)
+]
 
 find_unused_parameters = True
