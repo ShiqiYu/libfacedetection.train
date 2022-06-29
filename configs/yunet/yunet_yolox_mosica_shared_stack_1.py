@@ -164,6 +164,6 @@ custom_hooks = [
     #     resume_from=None,
     #     momentum=0.0001,
     #     priority=49)
-    dict(type='YuNetSampleSizeStatisticsHook', out_file='./work_dirs/sample_statics.json', save_interval=50)
+    dict(type='YuNetSampleSizeStatisticsHook', out_file='sample_statics.json', save_interval=50)
 ]
 find_unused_parameters = True
