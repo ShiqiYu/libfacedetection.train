@@ -4,6 +4,8 @@ optimizer_config = dict(grad_clip=None)
 lr_mult=8
 lr_config = dict(
     policy='step',
+    # power=2.,
+    # min_lr=1e-7,
     warmup='linear',
     warmup_iters=1500,
     warmup_ratio=0.001,
@@ -23,26 +25,26 @@ data_root = 'data/widerface/'
 train_root = 'data/widerface/'
 val_root = 'data/widerface/'
 img_norm_cfg = dict(
-    mean=[0., 0., 0.], std=[1.0, 1.0, 1.0], to_rgb=False)
+    mean=[127.5, 127.5, 127.5], std=[128.0, 128.0, 128.0], to_rgb=True)
 train_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromFile', to_float32=True),
     dict(type='LoadAnnotations', with_bbox=True, with_keypoints=True),
     dict(
         type='RandomSquareCrop',
         crop_choice=[0.3, 0.45, 0.6, 0.8, 1.0]),
     dict(type='Resize', img_scale=(640, 640), keep_ratio=False),
     dict(type='RandomFlip', flip_ratio=0.5),
-    dict(
-        type='PhotoMetricDistortion',
-        brightness_delta=32,
-        contrast_range=(0.5, 1.5),
-        saturation_range=(0.5, 1.5),
-        hue_delta=18),
+    # dict(
+    #     type='PhotoMetricDistortion',
+    #     brightness_delta=32,
+    #     contrast_range=(0.5, 1.5),
+    #     saturation_range=(0.5, 1.5),
+    #     hue_delta=18),
     dict(
         type='Normalize',
-        mean=[0., 0., 0.],
-        std=[1.0, 1.0, 1.0],
-        to_rgb=False),
+        mean=[127.5, 127.5, 127.5],
+        std=[128.0, 128.0, 128.0],
+        to_rgb=True),
     dict(type='DefaultFormatBundle'),
     dict(
         type='Collect',
@@ -62,9 +64,9 @@ test_pipeline = [
             dict(type='RandomFlip', flip_ratio=0.0),
             dict(
                 type='Normalize',
-                mean=[0., 0., 0.],
-                std=[1.0, 1.0, 1.0],
-                to_rgb=False),
+                mean=[127.5, 127.5, 127.5],
+                std=[128.0, 128.0, 128.0],
+                to_rgb=True),
             dict(type='Pad', size=(640, 640), pad_val=0),
             dict(type='ImageToTensor', keys=['img']),
             dict(type='Collect', keys=['img'])
@@ -78,7 +80,7 @@ data = dict(
         ann_file='data/widerface/labelv2/train/labelv2.txt',
         img_prefix='data/widerface/WIDER_train/images/',
         pipeline=[
-            dict(type='LoadImageFromFile'),
+            dict(type='LoadImageFromFile', to_float32=True),
             dict(type='LoadAnnotations', with_bbox=True, with_keypoints=True),
             dict(
                 type='RandomSquareCrop',
@@ -88,17 +90,17 @@ data = dict(
                 ]),
             dict(type='Resize', img_scale=(640, 640), keep_ratio=False),
             dict(type='RandomFlip', flip_ratio=0.5),
-            dict(
-                type='PhotoMetricDistortion',
-                brightness_delta=32,
-                contrast_range=(0.5, 1.5),
-                saturation_range=(0.5, 1.5),
-                hue_delta=18),
+            # dict(
+            #     type='PhotoMetricDistortion',
+            #     brightness_delta=32,
+            #     contrast_range=(0.5, 1.5),
+            #     saturation_range=(0.5, 1.5),
+            #     hue_delta=18),
             dict(
                 type='Normalize',
-                mean=[0., 0., 0.],
-                std=[1.0, 1.0, 1.0],
-                to_rgb=False),
+                mean=[127.5, 127.5, 127.5],
+                std=[128.0, 128.0, 128.0],
+                to_rgb=True),
             dict(type='DefaultFormatBundle'),
             dict(
                 type='Collect',
@@ -122,9 +124,9 @@ data = dict(
                     dict(type='RandomFlip', flip_ratio=0.0),
                     dict(
                         type='Normalize',
-                        mean=[0., 0., 0.],
-                        std=[1.0, 1.0, 1.0],
-                        to_rgb=False),
+                        mean=[127.5, 127.5, 127.5],
+                        std=[128.0, 128.0, 128.0],
+                        to_rgb=True),
                     dict(type='Pad', size=(640, 640), pad_val=0),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
@@ -145,9 +147,9 @@ data = dict(
                     dict(type='RandomFlip', flip_ratio=0.0),
                     dict(
                         type='Normalize',
-                        mean=[0., 0., 0.],
-                        std=[1.0, 1.0, 1.0],
-                        to_rgb=False),
+                        mean=[127.5, 127.5, 127.5],
+                        std=[128.0, 128.0, 128.0],
+                        to_rgb=True),
                     dict(type='Pad', size=(640, 640), pad_val=0),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
