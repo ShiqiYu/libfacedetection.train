@@ -91,6 +91,21 @@ Export to onnx model for [libfacedetection/example/opencv_dnn](https://github.co
 ```shell
 python exportonnx.py -m weights/yunet_final.pth
 ```
+## Compare ONNX model with other works
+Inference on exported ONNX models using ONNXRuntime:
+```shell
+python tools/compare_inference.py ./onnx/yunet_final_dynamic_simplify.onnx --mode AUTO --eval --score_thresh 0.3 --nms_thresh 0.45
+```
+Some similar approaches(e.g. SCRFD, Yolo5face, retinaface) to inference are also supported.
+
+With Intel i7-12700K and `input_size = origin size, score_thresh = 0.3, nms_thresh = 0.45`, some results are list as follow:
+ | Model | AP_easy | AP_medium | AP_hard | #Params | Params Ratio | MFlops | Froward (ms) | 
+ | ----- | ------- | --------- | ------- | ------- | ------------ | ------ | ------- | 
+ | SCRFD0.5(ICLR2022) | 0.879 | 0.863 | 0.759 | 631410 | 7.43x | 184 | 22.3 | 12.9
+ | Retinaface0.5(CVPR2020) | 0.899 | 0.866 | 0.660 | 426608 | 5.02X | 245 | 13.9 | 
+ | YuNet(Ours) | 0.885 | 0.877 | 0.762 | 85006 | 1.0x | 136 | 10.6 |
+
+The compared ONNX model is avaliable in https://share.weiyun.com/nEsVgJ2v Password：gydjjs
 
 ## Citation
 The loss used in training is EIoU, a novel extended IoU. More details can be found in:
