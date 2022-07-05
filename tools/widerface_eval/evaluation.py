@@ -34,8 +34,9 @@ import pickle
 import argparse
 import numpy as np
 from scipy.io import loadmat
+from .bbox import bbox_overlaps
+from IPython import embed
 
-from utils import matrix_iou
 
 def get_gt_boxes(gt_dir):
     """ gt dir: (wider_face_val.mat, wider_easy_val.mat, wider_medium_val.mat, wider_hard_val.mat)"""
@@ -172,7 +173,7 @@ def image_eval(pred, gt, ignore, iou_thresh):
     _gt[:, 2] = _gt[:, 2] + _gt[:, 0]
     _gt[:, 3] = _gt[:, 3] + _gt[:, 1]
 
-    overlaps = matrix_iou(_pred[:, :4], _gt)
+    overlaps = bbox_overlaps(_pred[:, :4], _gt)
 
     for h in range(_pred.shape[0]):
 
@@ -285,11 +286,15 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
         ap = voc_ap(recall, propose)
         aps.append(ap)
 
-    print("==================== Results ====================")
-    print("Easy   Val AP: {}".format(aps[0]))
-    print("Medium Val AP: {}".format(aps[1]))
-    print("Hard   Val AP: {}".format(aps[2]))
-    print("=================================================")
+    print(
+        f"""
+            ==================== Results ====================
+            Easy   Val AP: {aps[0]}
+            Medium Val AP: {aps[1]}
+            Hard   Val AP: {aps[2]}
+            =================================================
+        """
+    )
 
 
 if __name__ == '__main__':
@@ -300,3 +305,15 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     evaluation(args.pred, args.gt)
+
+
+
+
+
+
+
+
+
+
+
+

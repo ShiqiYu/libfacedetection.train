@@ -1,30 +1,15 @@
-#!/usr/bin/python3
-from __future__ import print_function
-
-import os
-import sys
 import torch
-import torch.backends.cudnn as cudnn
 import argparse
-import cv2
-import numpy as np
-from collections import OrderedDict
-
-sys.path.append(os.getcwd() + '/../../src')
-
-from config import cfg
-from prior_box import PriorBox
-from nms import nms
-from utils import decode
-from timer import Timer
-from yufacedetectnet import YuFaceDetectNet
-
+from model import YuDetectNet
+import yaml
+import os
 
 parser = argparse.ArgumentParser(description='Face and Landmark Detection')
-
-parser.add_argument('-m', '--trained_model', default='weights/yunet_final.pth',
+parser.add_argument('-c', '--config', default='./config/yufacedet.yaml',
+                    type=str, help='config path to open')
+parser.add_argument('-m', '--trained_model', default='./weights/yunet_final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('-o', '--output', default='facedetectcnn-int8data.cpp',
+parser.add_argument('-o', '--output', default='./weights_cpp/facedetectcnn-data.cpp',
                     type=str, help='The output cpp file, trained parameters inside')
 args = parser.parse_args()
 
@@ -62,15 +47,22 @@ def load_model(model, pretrained_path, load_to_cpu):
     return model
 
 
+
 if __name__ == '__main__':
 
     torch.set_grad_enabled(False)
-
+    with open(args.config, mode='r', encoding='utf-8') as f:
+        cfg = yaml.safe_load(f)
     # net and model
-    net = YuFaceDetectNet(phase='test', size=None )    # initialize detector
+    net = YuDetectNet(cfg)    # initialize detector
     net = load_model(net, args.trained_model, True)
     net.eval()
 
     print('Finished loading model!')
     
-    net.export_cpp(args.output)
+    if not os.path.exists(os.path.dirname(args.output)):
+        os.makedirs(os.path.dirname(args.output))
+    cpp_data = net.export_cpp()
+    with open(args.output, 'w') as f:
+        f.write(cpp_data)
+    print(f'Finish export cpp-data to {args.output}')

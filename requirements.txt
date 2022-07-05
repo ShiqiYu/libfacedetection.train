@@ -1,7 +1,11 @@
-opencv-python>=4.5.4.58
+opencv-python
 torch>=1.7.0
 tensorboard
 scipy
 tqdm
 cython
-nvidia-dali==1.5.0
+yaml
+onnx
+nvidia-dali=1.5.0
+onnxsim
+onnxruntime

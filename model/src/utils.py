@@ -164,24 +164,17 @@ def encode(matched, priors, variances):
         encoded boxes and landmarks (tensor), Shape: [num_priors, 14]
     """
 
-    # dist b/t match center and prior's center
-    g_cxcy = (matched[:, 0:2] + matched[:, 2:4])/2 - priors[:, 0:2]
-    # encode variance
-    g_cxcy /= (variances[0] * priors[:, 2:4])
-    # match wh / prior wh
-    g_wh = (matched[:, 2:4] - matched[:, 0:2]) / priors[:, 2:4]
-    g_wh = torch.log(g_wh) / variances[1]
+    boxes = matched.clone()
+    boxes[:, 0:2] = (matched[:, 0:2] + matched[:, 2:4])/2 - priors[:, 0:2]
+    boxes[:, 0:2] /= (variances[0] * priors[:, 2:4])
+    boxes[:, 2:4] = (matched[:, 2:4] - matched[:, 0:2]) / priors[:, 2:4]
+    boxes[:, 2:4] = torch.log(boxes[:, 2:4]) / variances[1]
 
     # landmarks
-    g_xy1 = (matched[:, 4:6] - priors[:, 0:2]) / (variances[0] * priors[:, 2:4])
-    g_xy2 = (matched[:, 6:8] - priors[:, 0:2]) / (variances[0] * priors[:, 2:4])
-    g_xy3 = (matched[:, 8:10] - priors[:, 0:2]) / (variances[0] * priors[:, 2:4])
-    g_xy4 = (matched[:, 10:12] - priors[:, 0:2]) / (variances[0] * priors[:, 2:4])
-    g_xy5 = (matched[:, 12:14] - priors[:, 0:2]) / (variances[0] * priors[:, 2:4])
-
-    # return target for loss
-    return torch.cat([g_cxcy, g_wh, g_xy1, g_xy2, g_xy3, g_xy4, g_xy5], 1)  # [num_priors,14]
-
+    if matched.shape[-1] > 4:
+        boxes[:, 4::2] = (boxes[:, 4::2] - priors[:, None, 0]) / (priors[:, None, 2] * variances[0])
+        boxes[:, 5::2] = (boxes[:, 5::2] - priors[:, None, 1]) / (priors[:, None, 3] * variances[0])
+    return boxes
 
 # Adapted from https://github.com/Hakuyume/chainer-ssd
 def decode(loc, priors, variances):
@@ -196,16 +189,17 @@ def decode(loc, priors, variances):
     Return:
         decoded bounding box predictions
     """
-    boxes = torch.cat((
-        priors[:, 0:2] + loc[:, 0:2] * variances[0] * priors[:, 2:4],
-        priors[:, 2:4] * torch.exp(loc[:, 2:4] * variances[1]),
-        priors[:, 0:2] + loc[:, 4:6] * variances[0] * priors[:, 2:4],
-        priors[:, 0:2] + loc[:, 6:8] * variances[0] * priors[:, 2:4],
-        priors[:, 0:2] + loc[:, 8:10] * variances[0] * priors[:, 2:4],
-        priors[:, 0:2] + loc[:, 10:12] * variances[0] * priors[:, 2:4],
-        priors[:, 0:2] + loc[:, 12:14] * variances[0] * priors[:, 2:4]), 1)
+    
+    boxes = loc.clone()
+    boxes[:, 0:2] = priors[:, 0:2] + boxes[:, 0:2] * variances[0] * priors[:, 2:4]
+    boxes[:, 2:4] = priors[:, 2:4] * torch.exp(boxes[:, 2:4] * variances[1])
     boxes[:, 0:2] -= boxes[:, 2:4] / 2
     boxes[:, 2:4] += boxes[:, 0:2]
+    
+    # landmarks
+    if loc.shape[-1] > 4:
+        boxes[:, 4::2] = priors[:, None, 0] + boxes[:, 4::2] * variances[0] * priors[:, None, 2]
+        boxes[:, 5::2] = priors[:, None, 1] + boxes[:, 5::2] * variances[0] * priors[:, None, 3]
     return boxes
 
 
