@@ -15,7 +15,7 @@ model:
     min_sizes: [[10, 16, 24], [32, 48], [64, 96], [128, 192, 256]]
     steps: [8, 16, 32, 64]
     ratio: [1.2, 2.6]
-    clip: True
+    clip: False
   loss:
     variance: [0.1, 0.2]
     overlap_thresh: 0.35
@@ -46,12 +46,12 @@ train:
   max_epochs: 300
   workspace: ./workspace
   prefix: carplate
-  save_interval: 20
+  save_interval: 50
   logger: 
     logfile: True
     sysout: True
     tensorboard: True
-    log_interval: 50
+    log_interval: 20
 test:
   multi_scale: False
   confidence_threshold: 0.5
@@ -65,5 +65,5 @@ test:
   dataset:
     mode: CCPD
     root: ./data/CCPD2019/
-    split: test
+    split: test_0.2
 

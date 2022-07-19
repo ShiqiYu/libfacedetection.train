@@ -71,6 +71,8 @@ def eval_hanco(kargs: dict):
     preds = np.empty((0, 7))
     for result in results:
         det = result['pred']
+        det[:, 2] = det[:, 2] - det[:, 0] 
+        det[:, 3] = det[:, 3] - det[:, 1] 
         pred = np.ones((det.shape[0], 7), dtype=np.float32)
         pred[:, 0] *= float(result['mata']['id'])
         pred[:, 1:-1] = det
@@ -81,17 +83,45 @@ def eval_hanco(kargs: dict):
         pickle.dump(preds, f)
 
     print('COCO evaluation ...')
-    try:
-        from .coco_eval.PythonAPI.pycocotools import COCO, COCOeval
-    except ImportError:
-        print('The pycocotools API can not find, \nIf you are evaling, you should run ./tools/coco_eval/make_coco.sh.')
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+
     gt_path = os.path.join(gt_root, 'detection_merge',f"{split}.json")
     coco_gt = COCO(gt_path)
-    coco_dt = coco_gt.loadRes(results)
+    coco_dt = coco_gt.loadRes(preds)
     cocoEval = COCOeval(coco_gt, coco_dt, "bbox")
     cocoEval.evaluate()
     cocoEval.accumulate()
     cocoEval.summarize()
 
 def eval_ccpd(kargs: dict):
-    pass
+    results = kargs.get('results', None)
+    results_save_path = os.path.join(kargs.get('results_save_dir'), 'result.pkl')
+    split = kargs.get('split', None)
+    gt_root=kargs.get('gt_root', None)
+
+    preds = np.empty((0, 7))
+    for result in results:
+        det = result['pred']
+        det[:, 2] = det[:, 2] - det[:, 0] 
+        det[:, 3] = det[:, 3] - det[:, 1] 
+        pred = np.ones((det.shape[0], 7), dtype=np.float32)
+        pred[:, 0] *= float(result['mata']['id'])
+        pred[:, 1:-1] = det
+        preds = np.concatenate([preds, pred], axis=0)
+
+    print(f'Save result to {results_save_path}')
+    with open(results_save_path, 'wb') as f:
+        pickle.dump(preds, f)
+
+    print('COCO evaluation ...')
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+    
+    gt_path = os.path.join(gt_root, 'splits_coco', f"{split}.json")
+    coco_gt = COCO(gt_path)
+    coco_dt = coco_gt.loadRes(preds)
+    cocoEval = COCOeval(coco_gt, coco_dt, "bbox")
+    cocoEval.evaluate()
+    cocoEval.accumulate()
+    cocoEval.summarize()

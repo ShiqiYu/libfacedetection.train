@@ -518,7 +518,7 @@ class CCPDtestloader(object):
         super().__init__()
         self.root = kargs.get('root', None)
         self.split = kargs.get('split', None)
-        assert self.root == None or self.root == None
+        assert self.root is not None and self.split is not None
         annos_file = os.path.join(self.root, "splits_coco", f"{self.split}.json")
         with open(annos_file, "r") as f:
             annos = json.load(f)
