@@ -25,7 +25,7 @@ data_root = 'data/widerface/'
 train_root = 'data/widerface/'
 val_root = 'data/widerface/'
 img_norm_cfg = dict(
-    mean=[127.5, 127.5, 127.5], std=[128.0, 128.0, 128.0], to_rgb=True)
+    mean=[0., 0., 0.], std=[1., 1., 1.], to_rgb=False)
 train_pipeline = [
     dict(type='LoadImageFromFile', to_float32=True),
     dict(type='LoadAnnotations', with_bbox=True, with_keypoints=True),
@@ -44,7 +44,7 @@ train_pipeline = [
         type='Normalize',
         mean=[0., 0., 0.],
         std=[1., 1., 1.],
-        to_rgb=True),
+        to_rgb=False),
     dict(type='DefaultFormatBundle'),
     dict(
         type='Collect',
@@ -66,7 +66,7 @@ test_pipeline = [
                 type='Normalize',
                 mean=[0., 0., 0.],
                 std=[1., 1., 1.],
-                to_rgb=True),
+                to_rgb=False),
             dict(type='Pad', size=(640, 640), pad_val=0),
             dict(type='ImageToTensor', keys=['img']),
             dict(type='Collect', keys=['img'])
@@ -100,7 +100,7 @@ data = dict(
                 type='Normalize',
                 mean=[0., 0., 0.],
                 std=[1., 1., 1.],
-                to_rgb=True),
+                to_rgb=False),
             dict(type='DefaultFormatBundle'),
             dict(
                 type='Collect',
@@ -126,7 +126,7 @@ data = dict(
                         type='Normalize',
                         mean=[0., 0., 0.],
                         std=[1., 1., 1.],
-                        to_rgb=True),
+                        to_rgb=False),
                     dict(type='Pad', size=(640, 640), pad_val=0),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
@@ -149,7 +149,7 @@ data = dict(
                         type='Normalize',
                         mean=[0., 0., 0.],
                         std=[1., 1., 1.],
-                        to_rgb=True),
+                        to_rgb=False),
                     dict(type='Pad', size=(640, 640), pad_val=0),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
