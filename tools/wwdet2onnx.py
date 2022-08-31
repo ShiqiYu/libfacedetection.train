@@ -43,10 +43,12 @@ def pytorch2onnx(model,
         return_loss=False,
         rescale=False)
 
+    output_names = []
+    for t in ["cls", "obj", "bbox"]:
+        output_names.extend([f"{t}_{s}" for s in [8, 16, 32]])
+
     if model.bbox_head.use_kps:
-        output_names = ['bbox', 'kps', 'cls']
-    else:
-        output_names = ['bbox', 'cls']
+        output_names.extend([f"kps_{s}" for s in [8, 16, 32]]) 
 
     # dynamic_axes = None
     dynamic_axes = {out: {0: 'batch', 1: 'dim'} for out in output_names}
@@ -126,13 +128,13 @@ def pytorch2onnx(model,
     onnx.save(net, output_file)
     print(f'Successfully exported ONNX model: {output_file}')
 
-    print('Test model ...')
-    img = torch.randn(input_shape, requires_grad=False)
-    ort_session = onnxruntime.InferenceSession(output_file)
-    ort_inputs = {ort_session.get_inputs()[0].name: img.numpy()}
-    ort_outs = ort_session.run(None, ort_inputs)
-    torch_outs = model.feature_test(img)
-    [np.testing.assert_allclose(torch_out.detach().numpy(), ort_out, rtol=1e-03, atol=1e-05) for torch_out, ort_out in zip(torch_outs, ort_outs)]
+    # print('Test model ...')
+    # img = torch.randn(input_shape, requires_grad=False)
+    # ort_session = onnxruntime.InferenceSession(output_file)
+    # ort_inputs = {ort_session.get_inputs()[0].name: img.numpy()}
+    # ort_outs = ort_session.run(None, ort_inputs)
+    # torch_outs = model.feature_test(img)
+    # [np.testing.assert_allclose(torch_out.detach().numpy(), ort_out, rtol=1e-03, atol=1e-05) for torch_out, ort_out in zip(torch_outs, ort_outs)]
 
     if verify:
         # wrap onnx model
@@ -231,12 +233,7 @@ def parse_args():
     parser.add_argument('--opset-version', type=int, default=11)
     parser.add_argument(
         '--test-img', type=str, default=None, help='Images for test')
-    parser.add_argument(
-        '--dataset',
-        type=str,
-        default='coco',
-        help='Dataset name. This argument is deprecated and will be removed \
-        in future releases.')
+
     parser.add_argument(
         '--verify',
         action='store_true',
@@ -251,20 +248,7 @@ def parse_args():
         nargs='+',
         default=[640, 640],
         help='input image size')
-    parser.add_argument(
-        '--mean',
-        type=float,
-        nargs='+',
-        default=[123.675, 116.28, 103.53],
-        help='mean value used for preprocess input data.This argument \
-        is deprecated and will be removed in future releases.')
-    parser.add_argument(
-        '--std',
-        type=float,
-        nargs='+',
-        default=[58.395, 57.12, 57.375],
-        help='variance value used for preprocess input data. '
-        'This argument is deprecated and will be removed in future releases.')
+
     parser.add_argument(
         '--cfg-options',
         nargs='+',

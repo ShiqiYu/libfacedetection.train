@@ -212,6 +212,7 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
         """
         if self.shared_stack_convs > 0:
             feats = [convs(feat) for feat, convs in zip(feats, self.multi_level_share_convs)]
+                    
         if self.stacked_convs > 0:
             feats_cls, feats_reg = [], []
             for i in range(self.strides_num):
@@ -226,6 +227,14 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
             bbox_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_bbox)]
             obj_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_obj)]
             kps_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_kps)]
+        
+        if torch.onnx.is_in_onnx_export():
+            batch_size = cls_preds[0].shape[0]
+            cls = [f.permute(0, 2, 3, 1).view(batch_size, -1, self.num_classes).sigmoid() for f in cls_preds]
+            obj = [f.permute(0, 2, 3, 1).view(batch_size, -1, 1).sigmoid() for f in obj_preds]
+            bbox = [f.permute(0, 2, 3, 1).view(batch_size, -1, 4) for f in bbox_preds]
+            kps = [f.permute(0, 2, 3, 1).view(batch_size, -1, self.NK * 2) for f in kps_preds]
+            return (cls, obj, bbox, kps)
 
         return cls_preds, bbox_preds, obj_preds, kps_preds
 

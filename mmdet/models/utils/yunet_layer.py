@@ -2,59 +2,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 
-def combine_conv_bn(conv, bn):
-    conv_result = nn.Conv2d(conv.in_channels, conv.out_channels, 
-                            kernel_size=conv.kernel_size, stride=conv.stride, 
-                            padding=conv.padding, groups = conv.groups, bias=True)
-    
-    scales = bn.weight / torch.sqrt(bn.running_var + bn.eps)
-    conv_result.bias[:] = (conv.bias - bn.running_mean) * scales + bn.bias
-    for ch in range(conv.out_channels):
-        conv_result.weight[ch, :, :, :] = conv.weight[ch, :, :, :] * scales[ch]
-
-    return conv_result
-
-def convert_param2string(conv, name, is_depthwise=False, isfirst3x3x3=False, precision='.3g'):
-    '''
-    Convert the weights to strings
-    '''
-    (out_channels, in_channels, width, height) = conv.weight.size()
-
-    if (isfirst3x3x3):
-        w = conv.weight.detach().numpy().reshape((-1,27))
-        w_zeros = np.zeros((out_channels ,5))
-        w = np.hstack((w, w_zeros))
-        w = w.reshape(-1)
-    elif (is_depthwise):
-        w = conv.weight.detach().numpy().reshape((-1,9)).transpose().reshape(-1)
-    else:
-        w = conv.weight.detach().numpy().reshape(-1)
-
-    b = conv.bias.detach().numpy().reshape(-1)
-
-    if (isfirst3x3x3):
-        lengthstr_w = str(out_channels) + '* 32 * 1 * 1'
-        # print(conv.in_channels, conv.out_channels, conv.kernel_size)
-    else:
-        lengthstr_w = str(out_channels) + '*' + str(in_channels) + '*' + str(width) + '*' + str(height)
-    resultstr = 'float ' + name + '_weight[' + lengthstr_w + '] = {'
-
-    for idx in range(w.size - 1):
-        resultstr += (format(w[idx], precision) + ',')
-    resultstr += (format(w[-1], precision))
-    resultstr += '};\n'
-
-    resultstr += 'float ' + name + '_bias[' + str(out_channels) + '] = {'
-    for idx in range(b.size - 1):
-        resultstr += (format(b[idx], precision) + ',')
-    resultstr += (format(b[-1], precision))
-    resultstr += '};\n'
-
-    return resultstr
-
-
-def get_activation_fn(activation_type, inplace=True):
-    
+def get_activation_fn(activation_type, inplace=True):    
     if activation_type == 'relu':
         relu = nn.ReLU(inplace=inplace)
     elif activation_type == "swish":
@@ -86,15 +34,6 @@ class ConvDPUnit(nn.Module):
             x = self.relu(x)
         return x
 
-    def convert_to_cppstring(self, varname):
-        rs1 = convert_param2string(self.conv1, varname+'_1', False)
-        if self.withBNRelu:
-            rs2 = convert_param2string(combine_conv_bn(self.conv2, self.bn), varname+'_2', True)
-        else:
-            rs2 = convert_param2string(self.conv2, varname+'_2', True)
-
-        return rs1 + rs2
-
 class Conv_head(nn.Module):
     def __init__(self, in_channels, mid_channels, out_channels, activation_type='relu'):
         super(Conv_head, self).__init__()
@@ -111,11 +50,6 @@ class Conv_head(nn.Module):
         x = self.relu1(x)
         x = self.conv2(x)
         return x
-
-    def convert_to_cppstring(self, varname):
-       rs1 = convert_param2string(combine_conv_bn(self.conv1, self.bn1), varname + '0', False, True)
-       rs2 = self.conv2.convert_to_cppstring(varname + '1')
-       return rs1 + rs2 + '\n'
 
 class Conv4layerBlock(nn.Module):
     def __init__(self, in_channels, out_channels, withBNRelu=True, activation_type='relu'):

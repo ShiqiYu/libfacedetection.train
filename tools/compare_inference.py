@@ -307,7 +307,7 @@ class WWDET(Detector):
         super().__init__(model_file, nms_thresh)
         self.taskname = 'wwdet'
         self.priors_cache = {}
-        self.strides = [8, 16, 32, 64]
+        self.strides = [8, 16, 32]
 
     def get_single_level_center_priors(
         self, featmap_size, stride, dtype
