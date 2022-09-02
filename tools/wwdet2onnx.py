@@ -13,6 +13,57 @@ from mmdet.core.export import build_model_from_cfg, preprocess_example_input
 from mmdet.core.export.model_wrappers import ONNXRuntimeDetector
 import os
 import onnxruntime
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Convert MMDetection models to ONNX')
+    parser.add_argument('config', help='test config file path')
+    parser.add_argument('checkpoint', help='checkpoint file')
+    parser.add_argument('--input-img', type=str, help='Images for input')
+    parser.add_argument(
+        '--show',
+        action='store_true',
+        help='Show onnx graph and detection outputs')
+    parser.add_argument('--output-file', type=str, default='tmp.onnx')
+    parser.add_argument('--opset-version', type=int, default=11)
+    parser.add_argument(
+        '--test-img', type=str, default=None, help='Images for test')
+
+    parser.add_argument(
+        '--verify',
+        action='store_true',
+        help='verify the onnx model output against pytorch output')
+    parser.add_argument(
+        '--simplify',
+        action='store_true',
+        help='Whether to simplify onnx model.')
+    parser.add_argument(
+        '--shape',
+        type=int,
+        nargs='+',
+        default=[640, 640],
+        help='input image size')
+
+    parser.add_argument(
+        '--cfg-options',
+        nargs='+',
+        action=DictAction,
+        help='Override some settings in the used config, the key-value pair '
+        'in xxx=yyy format will be merged into config file. If the value to '
+        'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
+        'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
+        'Note that the quotation marks are necessary and that no white space '
+        'is allowed.')
+    parser.add_argument(
+        '--dynamic-export',
+        action='store_true',
+        help='Whether to export onnx with dynamic axis.')
+
+    args = parser.parse_args()
+    return args
+
+
 def pytorch2onnx(model,
                  input_img,
                  input_shape,
@@ -217,55 +268,6 @@ def parse_normalize_cfg(test_pipeline):
     assert len(norm_config_li) == 1, '`norm_config` should only have one'
     norm_config = norm_config_li[0]
     return norm_config
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Convert MMDetection models to ONNX')
-    parser.add_argument('config', help='test config file path')
-    parser.add_argument('checkpoint', help='checkpoint file')
-    parser.add_argument('--input-img', type=str, help='Images for input')
-    parser.add_argument(
-        '--show',
-        action='store_true',
-        help='Show onnx graph and detection outputs')
-    parser.add_argument('--output-file', type=str, default='tmp.onnx')
-    parser.add_argument('--opset-version', type=int, default=11)
-    parser.add_argument(
-        '--test-img', type=str, default=None, help='Images for test')
-
-    parser.add_argument(
-        '--verify',
-        action='store_true',
-        help='verify the onnx model output against pytorch output')
-    parser.add_argument(
-        '--simplify',
-        action='store_true',
-        help='Whether to simplify onnx model.')
-    parser.add_argument(
-        '--shape',
-        type=int,
-        nargs='+',
-        default=[640, 640],
-        help='input image size')
-
-    parser.add_argument(
-        '--cfg-options',
-        nargs='+',
-        action=DictAction,
-        help='Override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file. If the value to '
-        'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
-        'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
-        'Note that the quotation marks are necessary and that no white space '
-        'is allowed.')
-    parser.add_argument(
-        '--dynamic-export',
-        action='store_true',
-        help='Whether to export onnx with dynamic axis.')
-
-    args = parser.parse_args()
-    return args
 
 
 if __name__ == '__main__':

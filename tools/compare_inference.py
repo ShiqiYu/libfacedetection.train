@@ -302,120 +302,78 @@ class Detector:
         pass
     def detect(self, img, score_thresh=0.5, mode="ORIGIN"):
         pass
+
 class WWDET(Detector):
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:
         super().__init__(model_file, nms_thresh)
         self.taskname = 'wwdet'
-        self.priors_cache = {}
+        self.priors_cache = []
         self.strides = [8, 16, 32]
-
-    def get_single_level_center_priors(
-        self, featmap_size, stride, dtype
-    ):
-        """Generate centers of a single stage feature map.
-        Args:
-            batch_size (int): Number of images in one batch.
-            featmap_size (tuple[int]): height and width of the feature map
-            stride (int): down sample stride of the feature map
-            dtype (obj:`torch.dtype`): data type of the tensors
-            device (obj:`torch.device`): device of the tensors
-        Return:
-            priors (Tensor): center priors of a single level feature map.
-        """
-        h, w = featmap_size
-        x_range = (np.arange(w, dtype=dtype)) * stride
-        y_range = (np.arange(h, dtype=dtype)) * stride
-
-        # notice!!! in torch: y, x = np.meshgrid(y_range, x_range)
-        x, y = np.meshgrid(y_range, x_range)
-        y = y.flatten()
-        x = x.flatten()
-        strides = np.full((x.shape[0],), stride, dtype=dtype)
-        proiors = np.stack([x, y, strides, strides], axis=-1)
-        return proiors
-
-    def get_single_level_center_priors_torch(
-        self, batch_size, featmap_size, stride, dtype, device
-    ):
-        """Generate centers of a single stage feature map.
-        Args:
-            batch_size (int): Number of images in one batch.
-            featmap_size (tuple[int]): height and width of the feature map
-            stride (int): down sample stride of the feature map
-            dtype (obj:`torch.dtype`): data type of the tensors
-            device (obj:`torch.device`): device of the tensors
-        Return:
-            priors (Tensor): center priors of a single level feature map.
-        """
-        h, w = featmap_size
-        x_range = (torch.arange(w, dtype=dtype, device=device)) * stride
-        y_range = (torch.arange(h, dtype=dtype, device=device)) * stride
-        y, x = torch.meshgrid(y_range, x_range)
-        y = y.flatten()
-        x = x.flatten()
-        strides = x.new_full((x.shape[0],), stride)
-        proiors = torch.stack([x, y, strides, strides], dim=-1)
-        return proiors.unsqueeze(0).repeat(batch_size, 1, 1)
+        self.NK = 5
 
     def forward(self, img, score_thresh):
         self.time_engine.tic('forward_calc')
 
         input_size = tuple(img.shape[0:2][::-1])
-        blob = cv2.dnn.blobFromImage(img, 1.0/128, input_size, (127.5, 127.5, 127.5), swapRB=True)
+        blob = np.transpose(img, [2, 0, 1]).astype(np.float32)[np.newaxis, ...].copy()
         self.time_engine.toc('forward_calc')
 
         self.time_engine.tic('forward_run')
-        bbox_preds, kps_preds, cls_preds = self.session.run(None, {self.session.get_inputs()[0].name: blob})
-        bbox_preds = bbox_preds.squeeze(0)
-        kps_preds = kps_preds.squeeze(0)
-        cls_preds = cls_preds.reshape(-1)
+        nets_out = self.session.run(None, {self.session.get_inputs()[0].name: blob})
         self.time_engine.toc('forward_run')
 
-        self.time_engine.tic('forward_calc_1')
-        featmap_sizes = [
-            (math.floor(input_size[0] / stride), math.floor(input_size[1] / stride))
-            for stride in self.strides
-        ]
-        mlvl_center_priors = [
-            self.get_single_level_center_priors(
-                featmap_sizes[i],
-                stride,
-                dtype=np.float32,
-            )
-            for i, stride in enumerate(self.strides)
-        ]
-        center_priors = np.vstack(mlvl_center_priors)
+        self.time_engine.tic('forward_calc')
+        scores, bboxes, kpss = [], [], []
+        for idx, stride in enumerate(self.strides):
+            cls_pred = nets_out[idx].reshape(-1, 1)
+            obj_pred = nets_out[idx + len(self.strides)].reshape(-1, 1)
+            reg_pred = nets_out[idx + len(self.strides) * 2].reshape(-1, 4)
+            kps_pred = nets_out[idx + len(self.strides) * 3].reshape(-1, self.NK * 2)
 
-        bboxes = distance2bbox(center_priors[:, :2], bbox_preds * center_priors[:, 2, None], max_shape=input_size)
+            anchor_centers = np.stack(np.mgrid[:(input_size[0] // stride), :(input_size[1] // stride)][::-1], axis=-1)
+            anchor_centers = (anchor_centers * stride).astype(np.float32).reshape(-1, 2)
 
+            bbox_cxy = reg_pred[:, :2] * stride + anchor_centers[:]
+            bbox_wh = np.exp(reg_pred[:, 2:]) * stride
+            tl_x = (bbox_cxy[:, 0] - bbox_wh[:, 0] / 2.)
+            tl_y = (bbox_cxy[:, 1] - bbox_wh[:, 1] / 2.)
+            br_x = (bbox_cxy[:, 0] + bbox_wh[:, 0] / 2.)
+            br_y = (bbox_cxy[:, 1] + bbox_wh[:, 1] / 2.)
 
+            bboxes.append(np.stack([tl_x, tl_y, br_x, br_y], -1))
+            # for nk in range(self.NK):
+            per_kps = np.concatenate([((kps_pred[:, [2 * i, 2 * i + 1]] * stride) + anchor_centers) for i in range(self.NK)], axis=-1)
 
+            kpss.append(per_kps)
+            scores.append(cls_pred * obj_pred)
 
-        kps = distance2kps(center_priors[:, :2], kps_preds * center_priors[:, 2, None])
-        scores = sigmoid(cls_preds)
-        score_mask = scores > score_thresh
-        bboxes = bboxes[score_mask]
+        scores = np.concatenate(scores, axis=0).reshape(-1)
+        bboxes = np.concatenate(bboxes, axis=0)
+        kpss = np.concatenate(kpss, axis=0)
+        score_mask = (scores > score_thresh)
         scores = scores[score_mask]
-        kps = kps[score_mask]
-        self.time_engine.toc('forward_calc_1')
-        return bboxes, scores, kps
+        bboxes = bboxes[score_mask]
+        kpss = kpss[score_mask]
+        self.time_engine.toc('forward_calc')
+        return (bboxes, scores, kpss)
 
     def detect(self, img, score_thresh=0.5, mode="ORIGIN"):
         self.time_engine.tic('preprocess')
         det_img, det_scale = resize_img(img, mode)
+        # det_img = cv2.resize(img, (640, 640))
         self.time_engine.toc('preprocess')
 
-        bboxes, scores, kps = self.forward(det_img, score_thresh)
+        bboxes, scores, kpss = self.forward(det_img, score_thresh)
 
         self.time_engine.tic('postprocess')
         bboxes /= det_scale
-        kps /= det_scale
+        kpss /= det_scale
         pre_det = np.hstack((bboxes, scores[:, None]))
         keep = nms(pre_det, self.nms_thresh)
-        kps = kps[keep, :]
+        kpss = kpss[keep, :]
         bboxes = pre_det[keep, :]
         self.time_engine.toc('postprocess')
-        return bboxes, kps
+        return bboxes, kpss
 
 class SCRFD(Detector):
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:

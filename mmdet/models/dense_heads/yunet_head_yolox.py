@@ -378,13 +378,13 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
 
     def _kps_decode(self, priors, kps_preds):
         num_points = int(kps_preds.shape[-1] / 2)        
-        decoded_kps = torch.stack([(kps_preds[..., [i, i+1]] * priors[..., 2:]) + priors[..., :2] \
+        decoded_kps = torch.cat([(kps_preds[..., [2 * i, 2 * i + 1]] * priors[..., 2:]) + priors[..., :2] \
             for i in range(num_points)], -1)           
         return decoded_kps
 
     def _kps_encode_with_prior(self, priors, kps):
         num_points = int(kps.shape[-1] / 2)        
-        encoded_kps = [(kps[..., [i, i+1]] - priors[..., :2]) / priors[..., 2:] \
+        encoded_kps = [(kps[..., [2 * i, 2 * i + 1]] - priors[..., :2]) / priors[..., 2:] \
             for i in range(num_points)]
         encoded_kps = torch.cat(encoded_kps, -1)           
         return encoded_kps
@@ -395,7 +395,7 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
 
         num_points = int(kps.shape[-1] / 2)   
      
-        encoded_kps = [(kps[..., [i, i+1]] - xys[..., :]) / whs[..., :] \
+        encoded_kps = [(kps[..., [2 * i, 2 * i + 1]] - xys[..., :]) / whs[..., :] \
             for i in range(num_points)]
 
 
