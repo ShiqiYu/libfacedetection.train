@@ -316,10 +316,8 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
         """
         assert len(cls_scores) == len(bbox_preds) == len(objectnesses)
         cfg = self.test_cfg if cfg is None else cfg
-        scale_factors = np.array(
-            [img_meta['scale_factor'] for img_meta in img_metas])
 
-        num_imgs = len(img_metas)
+        num_imgs = cls_scores[0].shape[0]
         featmap_sizes = [cls_score.shape[2:] for cls_score in cls_scores]
         mlvl_priors = self.prior_generator.grid_priors(
             featmap_sizes,
@@ -350,11 +348,13 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
         flatten_bboxes = self._bbox_decode(flatten_priors, flatten_bbox_preds)
 
         if rescale:
+            scale_factors = np.array(
+                [img_meta['scale_factor'] for img_meta in img_metas])
             flatten_bboxes[..., :4] /= flatten_bboxes.new_tensor(
                 scale_factors).unsqueeze(1)
 
         result_list = []
-        for img_id in range(len(img_metas)):
+        for img_id in range(num_imgs):
             cls_scores = flatten_cls_scores[img_id]
             score_factor = flatten_objectness[img_id]
             bboxes = flatten_bboxes[img_id]
