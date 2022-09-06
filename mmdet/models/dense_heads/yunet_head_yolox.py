@@ -141,10 +141,9 @@ class YuNet_YOLOXHead(BaseDenseHead, BBoxTestMixin):
             self.multi_level_reg_convs = nn.ModuleList()
         self.multi_level_cls = nn.ModuleList()
         self.multi_level_bbox = nn.ModuleList()
-        self.multi_level_kps = nn.ModuleList()
         self.multi_level_obj = nn.ModuleList()
         if self.use_kps:
-            self.multi_level_conv_kps = nn.ModuleList()
+            self.multi_level_kps = nn.ModuleList()
         for _ in self.strides:
             if self.shared_stack_convs > 0:
                 single_level_share_convs = []

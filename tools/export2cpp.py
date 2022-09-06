@@ -128,8 +128,8 @@ class CppConvertor(object):
             self.data += f"{d['type']} {d['weight_name']}[{d['weight_size']}] = {'{'}{d['weight']}{'}'};\n"
             self.data += f"{d['type']} {d['bias_name']}[{d['bias_size']}] = {'{'}{d['bias']}{'}'};\n"
 
-        struct_str = ""
-        struct_str += f"\n\nConvInfoStruct param_pConvInfo[{len(self.cppdata)}] = {'{'}\n"
+        struct_str = "\n\n//(in_channels, out_channels, is_depthwise, is_pointwise, with_bn, weight_ptr, bias_ptr)\n"
+        struct_str += f"ConvInfoStruct param_pConvInfo[{len(self.cppdata)}] = {'{'}\n"
         for i in range(len(self.cppdata) - 1):
             d = self.cppdata[i]
             struct_str += f"\t{'{'}{d['in_channels']}, {d['out_channels']}, {self.pythonBool2CBool(d['is_dw'])}"\

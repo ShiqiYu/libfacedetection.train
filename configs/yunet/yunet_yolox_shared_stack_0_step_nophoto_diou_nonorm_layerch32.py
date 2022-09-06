@@ -171,7 +171,7 @@ model = dict(
         type='YuNet_YOLOXHead',
         num_classes=1,
         in_channels=64,
-        shared_stacked_convs=1,
+        shared_stacked_convs=0,
         stacked_convs=0,
         feat_channels=64,
         # norm_cfg=dict(type='BN', requires_grad=True),

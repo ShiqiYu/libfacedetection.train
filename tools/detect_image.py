@@ -1,21 +1,13 @@
 import argparse
-import os
-import os.path as osp
-import pickle
+from pyexpat import model
 import numpy as np
-import warnings
 
-import mmcv
 import torch
-from mmcv import Config, DictAction
-from mmcv.cnn import fuse_conv_bn
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
-                         wrap_fp16_model)
-
+from mmcv import Config
+from mmcv.runner import (load_checkpoint)
 
 from mmdet.models import build_detector
 
-# from torchinfo import summary
 import cv2
 
 
