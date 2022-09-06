@@ -306,7 +306,7 @@ def voc_ap(rec, prec):
     return ap
 
 
-def wider_evaluation(pred, gt_path, iou_thresh=0.5, debug=False):
+def wider_evaluation(pred, gt_path, iou_thresh=0.5):
     #pred = get_preds(pred)
     pred = norm_score(pred)
     thresh_num = 1000
