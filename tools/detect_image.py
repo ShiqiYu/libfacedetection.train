@@ -62,14 +62,11 @@ def main():
     model.eval()
 
     image = cv2.imread(args.image)
-    # ori_h, ori_w, _ = image.shape
-    # image = cv2.resize(image, (640, 640))
-    # cv2.imwrite("./test.jpg", image)
+
     image_tensor = torch.from_numpy(image).float()
     image_tensor = image_tensor.permute(2, 0, 1).unsqueeze(0)
 
     with torch.no_grad():
-        # result = model(return_loss=False, rescale=False, **data) 
         result = model.simple_test(image_tensor, None)         
     assert len(result)==1
     result = result[0][0]

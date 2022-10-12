@@ -4,16 +4,23 @@ import numpy as np
 from mmdet.core.export import build_model_from_cfg
 import argparse
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Convert wwfacedet models to libfacedetect dnn data')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--output-file', type=str, default='./work_dirs/wwfacedet-data.cpp')
-
+    parser.add_argument('--no_summary', action='store_true', help="Output the flops and params")
     args = parser.parse_args()
     return args
 
+def data2str_as_precision(data, precision):
+    s = format(data, precision)
+    if(s.count('.') == 0 and s.count('e') == 0):
+        return s + '.f'
+    else:
+        return s + 'f'
 
 class CppConvertor(object):
     '''This class can export CPP data file for libfacedetection'''
@@ -31,6 +38,7 @@ class CppConvertor(object):
 
 """
         self.convert()
+
     @staticmethod
     def combine_conv_bn(conv, bn):
         conv_result = nn.Conv2d(conv.in_channels, conv.out_channels, 
@@ -69,23 +77,25 @@ class CppConvertor(object):
             "bias_name": f"{name}_bias", "bias_size": "", "bias": "",\
             "with_bn": withBNRelu, "is_dw": is_depthwise, "in_channels": out_channels if is_depthwise else in_channels, "out_channels": out_channels}
         if (isfirst3x3x3):
-            data["weight_size"] = str(out_channels) + ' * 32 * 1 * 1'
+            data["weight_size"] = str(out_channels) + '*32*1*1'
             data["in_channels"] = 32
             # print(conv.in_channels, conv.out_channels, conv.kernel_size)
         else:
-            data["weight_size"] = str(out_channels) + ' * ' + str(in_channels) + ' * ' + str(width) + ' * ' + str(height)
+            data["weight_size"] = str(out_channels) + '*' + str(in_channels) + '*' + str(width) + '*' + str(height)
         
         weight_str = ""
         for idx in range(w.size - 1):
-            weight_str += (format(w[idx], precision) + ', ')
-        weight_str += (format(w[-1], precision))
+            # weight_str += (format(w[idx], precision) + 'f,')
+            weight_str += (data2str_as_precision(w[idx], precision) + ',')
+
+        weight_str += data2str_as_precision(w[-1], precision)
         data['weight'] = weight_str
 
         data["bias_size"] = str(out_channels)
         bias_str = ""
         for idx in range(b.size - 1):
-            bias_str += (format(b[idx], precision) + ', ')
-        bias_str += (format(b[-1], precision))
+            bias_str += (data2str_as_precision(b[idx], precision) + ',')
+        bias_str += (data2str_as_precision(b[-1], precision))
         data['bias'] = bias_str
 
         return data
@@ -132,7 +142,7 @@ class CppConvertor(object):
             self.data += f"{d['type']} {d['weight_name']}[{d['weight_size']}] = {'{'}{d['weight']}{'}'};\n"
             self.data += f"{d['type']} {d['bias_name']}[{d['bias_size']}] = {'{'}{d['bias']}{'}'};\n"
 
-        struct_str = "\n\n//(in_channels, out_channels, is_depthwise, is_pointwise, with_bn, weight_ptr, bias_ptr)\n"
+        struct_str = "\n//(in_channels, out_channels, is_depthwise, is_pointwise, with_bn, weight_ptr, bias_ptr)\n"
         struct_str += f"ConvInfoStruct param_pConvInfo[{len(self.cppdata)}] = {'{'}\n"
         for i in range(len(self.cppdata) - 1):
             d = self.cppdata[i]
@@ -148,7 +158,22 @@ class CppConvertor(object):
 
 if __name__ == "__main__":
     args = parse_args()
-    model = build_model_from_cfg(args.config, args.checkpoint)    
+    model = build_model_from_cfg(args.config, args.checkpoint)
+
+    if not args.no_summary:
+        try:
+            from mmcv.cnn import get_model_complexity_info
+        except ImportError:
+            raise ImportError('Please upgrade mmcv to >0.6.2')
+        model.eval()
+        if hasattr(model, 'forward_dummy'):
+            model.forward = model.forward_dummy
+        input_shape = (3, 320, 320)
+        flops, params = get_model_complexity_info(model, input_shape, as_strings=False)
+        split_line = '=' * 30
+        print(f'{split_line}\nInput shape: {input_shape}\n'
+          f'Flops: {flops}\nParams: {params}\n{split_line}')
+
     m_str = CppConvertor(model).data
     with open(args.output_file, "w") as f:
         f.write(m_str)
