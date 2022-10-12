@@ -124,8 +124,8 @@ def resize_img(img, mode):
     if mode == 'ORIGIN':
         det_img, det_scale = img, 1.
     elif mode == "AUTO":
-        assign_h = (img.shape[0] - 1 & (-32)) + 32
-        assign_w = (img.shape[1] - 1 & (-32)) + 32
+        assign_h = ((img.shape[0] - 1) & (-32)) + 32
+        assign_w = ((img.shape[1] - 1) & (-32)) + 32
         det_img = np.zeros( (assign_h, assign_w, 3), dtype=np.uint8)
         det_img[:img.shape[0], :img.shape[1], :] = img
         det_scale = 1.
@@ -330,7 +330,7 @@ class WWDET(Detector):
             reg_pred = nets_out[idx + len(self.strides) * 2].reshape(-1, 4)
             kps_pred = nets_out[idx + len(self.strides) * 3].reshape(-1, self.NK * 2)
 
-            anchor_centers = np.stack(np.mgrid[:(input_size[0] // stride), :(input_size[1] // stride)][::-1], axis=-1)
+            anchor_centers = np.stack(np.mgrid[:(input_size[1] // stride), :(input_size[0] // stride)][::-1], axis=-1)
             anchor_centers = (anchor_centers * stride).astype(np.float32).reshape(-1, 2)
 
             bbox_cxy = reg_pred[:, :2] * stride + anchor_centers[:]
