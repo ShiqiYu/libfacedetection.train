@@ -754,7 +754,7 @@ if __name__ == "__main__":
 
 
     else:
-        assert args.image is None
+        assert args.image is not None
         img = cv2.imread(args.image)
         print(f'The origin shape is: {img.shape[:-1]}')
         warm_epochs = 10
