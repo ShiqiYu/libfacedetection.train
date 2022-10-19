@@ -160,7 +160,7 @@ model = dict(
     type='YuNet',
     backbone=dict(
         type='YuNetBackbone',
-        stage_channels=[[3, 16, 16], [16, 32], [32, 64], [64, 64], [64, 64], [64, 64]],
+        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64], [64, 64]],
         downsample_idx=[0, 2, 3, 4],
         out_idx=[3, 4, 5]),
     neck=dict(
@@ -168,31 +168,46 @@ model = dict(
         in_channels=[64, 64, 64],
         out_idx=[0, 1, 2]),
     bbox_head=dict(
-        type='YuNet_YOLOXHead',
+        type='YuNet_Head',
         num_classes=1,
         in_channels=64,
-        shared_stacked_convs=0,
+        shared_stacked_convs=1,
         stacked_convs=0,
         feat_channels=64,
+        # norm_cfg=dict(type='BN', requires_grad=True),
+        #norm_cfg=dict(type='GN', num_groups=16, requires_grad=True),
         prior_generator=dict(
             type='MlvlPointGenerator',
             offset=0,
             strides=[8, 16, 32]),
-
-        loss_bbox=dict(type='DIoULoss', loss_weight=5.0, reduction='sum'),
+        # loss_cls=dict(
+        #     type='QualityFocalLoss',
+        #     use_sigmoid=True,
+        #     beta=2.0,
+        #     loss_weight=1.0),
+        loss_cls=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+            reduction='sum',
+            loss_weight=1.0),
+        # loss_cls=dict(
+        #     type='FocalLoss',
+        #     gamma=2.0,
+        #     alpha=0.25,
+        #     use_sigmoid=True,
+        #     reduction='mean',
+        #     loss_weight=1.0),
+        loss_bbox=dict(type='EIoULoss', loss_weight=5.0, reduction='sum'),
         use_kps=True,
         kps_num=5,
         loss_kps=dict(
-            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1)
-    ),
-    aux_head=dict(
-        type='AUX_head',
-        num_classes=1,
-        in_channels=64,
-        shared_stacked_convs=4,
-        shared_stacked_channel=128,
-        stacked_convs=2,
-        feat_channels=256,
+            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1),
+        loss_obj=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+            reduction='sum',
+            loss_weight=1.0),
+        
     ),
     train_cfg=dict(
         assigner=dict(type='SimOTAAssigner', center_radius=2.5)),
@@ -202,8 +217,7 @@ model = dict(
         score_thr=0.02,
         nms=dict(type='nms', iou_threshold=0.45),
         max_per_img=-1,    
-    )
-)
+    ))
 evaluation = dict(interval=1001, metric='mAP')
 # custom_hooks = [
 #     dict(type='YuNetSampleSizeStatisticsHook', out_file='sample_statics.json', save_interval=50)
