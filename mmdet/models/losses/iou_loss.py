@@ -175,7 +175,7 @@ def diou_loss(pred, target, eps=1e-7):
 @weighted_loss
 def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
     r"""Implementation of paper 'Extended-IoU Loss: A Systematic IoU-Related
-     Method: Beyond Simplified Regression for Better Localization, 
+     Method: Beyond Simplified Regression for Better Localization,
 
      <https://ieeexplore.ieee.org/abstract/document/9429909> '.
 
@@ -218,14 +218,12 @@ def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
     union = (px2 - px1) * (py2 - py1) + \
             (tx2 - tx1) * (ty2 - ty1) - intersection + eps
     # IoU
-    iou = intersection / union
+    ious = 1 - (intersection / union)
 
-    # EIoU
-    smooth_sign = ((1 - iou) < smooth_point).detach().float()
-    eiou = 0.5 * smooth_sign * ((1 - iou) ** 2) / smooth_point + \
-           (1 - smooth_sign) * ((1 - iou) - 0.5 * smooth_point)
-    loss = eiou
-
+    # Smooth-EIoU
+    smooth_sign = (ious < smooth_point).detach().float()
+    loss = 0.5 * smooth_sign * (ious**2) / smooth_point
+    loss += (1 - smooth_sign) * (ious - 0.5 * smooth_point)
     return loss
 
 @mmcv.jit(derivate=True, coderize=True)
