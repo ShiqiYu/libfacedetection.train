@@ -11,8 +11,6 @@ from itertools import product as product
 import torch.utils.data as data
 import scipy
 from mmdet.core.evaluation import wider_evaluation
-import math
-import torch
 
 def softmax(z):
     assert len(z.shape) == 2

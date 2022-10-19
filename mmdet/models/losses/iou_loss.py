@@ -174,15 +174,18 @@ def diou_loss(pred, target, eps=1e-7):
 @mmcv.jit(derivate=True, coderize=True)
 @weighted_loss
 def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
-    r"""`Implementation of Distance-IoU Loss: Faster and Better
-    Learning for Bounding Box Regression, https://arxiv.org/abs/1911.08287`_.
+    r"""Implementation of paper 'Extended-IoU Loss: A Systematic IoU-Related
+     Method: Beyond Simplified Regression for Better Localization, 
 
-    Code is modified from https://github.com/Zzh-tju/DIoU.
+     <https://ieeexplore.ieee.org/abstract/document/9429909> '.
+
+    Code is modified from https://github.com//ShiqiYu/libfacedetection.train.
 
     Args:
         pred (Tensor): Predicted bboxes of format (x1, y1, x2, y2),
             shape (n, 4).
         target (Tensor): Corresponding gt bboxes, shape (n, 4).
+        smooth_point (float): hyperparameter, default is 0.1
         eps (float): Eps to avoid log(0).
     Return:
         Tensor: Loss tensor.
@@ -193,16 +196,16 @@ def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
     # extent top left
     ex1 = torch.min(px1, tx1)
     ey1 = torch.min(py1, ty1)
+
     # intersection coordinates
     ix1 = torch.max(px1, tx1)
     iy1 = torch.max(py1, ty1)
     ix2 = torch.min(px2, tx2)
     iy2 = torch.min(py2, ty2)
+
     # extra
     xmin = torch.min(ix1, ix2)
     ymin = torch.min(iy1, iy2)
-    # xmax = ix2
-    # ymax = iy2
     xmax = torch.max(ix1, ix2)
     ymax = torch.max(iy1, iy2)
 
