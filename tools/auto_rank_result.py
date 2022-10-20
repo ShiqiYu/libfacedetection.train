@@ -1,13 +1,12 @@
-"""
-auto rank evalution results.
-
-"""
+"""auto rank evaluation results."""
 import os
 
+
 class AutoRank(object):
+
     def __init__(self, rank_path) -> None:
         self.rank_path = rank_path
-        self.sep = 18 
+        self.sep = 18
 
         if os.path.exists(rank_path):
             with open(rank_path, 'r') as f:
@@ -24,8 +23,14 @@ class AutoRank(object):
             per_content = {}
             per_content['config'] = file_content[idx][self.sep:-1]
             per_content['weight'] = file_content[idx + 1][self.sep:-1]
-            per_content['score_nms_thresh'] = [float(x) for x in file_content[idx + 2][self.sep + 1:-2].split(",")]
-            per_content['APS'] = [float(x) for x in file_content[idx + 3][self.sep + 1:-2].split(",")]
+            per_content['score_nms_thresh'] = [
+                float(x)
+                for x in file_content[idx + 2][self.sep + 1:-2].split(',')
+            ]
+            per_content['APS'] = [
+                float(x)
+                for x in file_content[idx + 3][self.sep + 1:-2].split(',')
+            ]
             content.append(per_content)
         return content
 
@@ -50,16 +55,16 @@ class AutoRank(object):
         tmp_content['APS'] = aps
 
         self.content.append(tmp_content)
-    
+
     def sort_content(self, reverse=True):
         self.content.sort(key=lambda x: x['APS'][2], reverse=reverse)
 
     def store_content(self):
-        s = ""
+        s = ''
         for it in self.content:
             for k, v in it.items():
-                s += f"{k.ljust(self.sep - 1)}:{v}\n"
-            s += "\n"
+                s += f'{k.ljust(self.sep - 1)}:{v}\n'
+            s += '\n'
         with open(self.rank_path, 'w') as f:
             f.write(s)
 
@@ -68,10 +73,11 @@ class AutoRank(object):
             self.add_content(it)
         self.sort_content(reverse)
         self.store_content()
-    
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     x = AutoRank('./eval.log')
     x.update()
 
-    # x.update({'config': "dasdasda", 'weight': "dfghdfghdfh", 'APS': [231, 231, 22], 'score_nms_thresh':[0.3, 0.45]})
+    # x.update({'config': "dasdasda", 'weight': "dfghdfghdfh",
+    # 'APS': [231, 231, 22], 'score_nms_thresh':[0.3, 0.45]})

@@ -171,6 +171,7 @@ def diou_loss(pred, target, eps=1e-7):
     loss = 1 - dious
     return loss
 
+
 @mmcv.jit(derivate=True, coderize=True)
 @weighted_loss
 def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
@@ -210,16 +211,21 @@ def eiou_loss(pred, target, smooth_point=0.1, eps=1e-7):
     ymax = torch.max(iy1, iy2)
 
     # Intersection
-    intersection = (ix2 - ex1) * (iy2 - ey1) + (xmin - ex1) * (ymin - ey1) - (ix1 - ex1) * (ymax - ey1) - (xmax - ex1) * (iy1 - ey1)
+    intersection = (ix2 - ex1) * (iy2 - ey1) + (xmin - ex1) * (ymin - ey1) - (
+        ix1 - ex1) * (ymax - ey1) - (xmax - ex1) * (
+            iy1 - ey1)
     # Union
-    union = (px2 - px1) * (py2 - py1) + (tx2 - tx1) * (ty2 - ty1) - intersection + eps
+    union = (px2 - px1) * (py2 - py1) + (tx2 - tx1) * (
+        ty2 - ty1) - intersection + eps
     # IoU
     ious = 1 - (intersection / union)
 
     # Smooth-EIoU
     smooth_sign = (ious < smooth_point).detach().float()
-    loss = 0.5 * smooth_sign * (ious**2) / smooth_point + (1 - smooth_sign) * (ious - 0.5 * smooth_point)
+    loss = 0.5 * smooth_sign * (ious**2) / smooth_point + (1 - smooth_sign) * (
+        ious - 0.5 * smooth_point)
     return loss
+
 
 @mmcv.jit(derivate=True, coderize=True)
 @weighted_loss
@@ -526,7 +532,11 @@ class CIoULoss(nn.Module):
 @LOSSES.register_module()
 class EIoULoss(nn.Module):
 
-    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0, smooth_point=0.1):
+    def __init__(self,
+                 eps=1e-6,
+                 reduction='mean',
+                 loss_weight=1.0,
+                 smooth_point=0.1):
         super(EIoULoss, self).__init__()
         self.eps = eps
         self.reduction = reduction

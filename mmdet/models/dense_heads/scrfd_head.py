@@ -1,19 +1,16 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import ConvModule, Scale, bias_init_with_prob, normal_init, DepthwiseSeparableConvModule
-from mmcv.cnn import constant_init, kaiming_init
+from mmcv.cnn import (ConvModule, DepthwiseSeparableConvModule, Scale,
+                      constant_init, normal_init)
 from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor_inside_flags, bbox2distance, bbox_overlaps,
-                        build_assigner, build_sampler, distance2bbox, distance2kps, kps2distance,
-                        images_to_levels, multi_apply, multiclass_nms,
-                        reduce_mean, unmap)
+                        build_assigner, build_sampler, distance2bbox,
+                        images_to_levels, kps2distance, multi_apply,
+                        multiclass_nms, reduce_mean, unmap)
 from ..builder import HEADS, build_loss
 from .anchor_head import AnchorHead
-from .base_dense_head import BaseDenseHead
-from .dense_test_mixins import BBoxTestMixin
 
 
 def last_zero_init(m):
@@ -103,11 +100,11 @@ class SCRFDHead(AnchorHead):
                  reg_max=8,
                  cls_reg_share=False,
                  strides_share=True,
-                 scale_mode = 1,
-                 dw_conv = False,
-                 use_kps = False,
-                 loss_kps=dict(type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=0.1),
-                 #loss_kps=dict(type='SmoothL1Loss', beta=1.0, loss_weight=0.3),
+                 scale_mode=1,
+                 dw_conv=False,
+                 use_kps=False,
+                 loss_kps=dict(
+                     type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=0.1),
                  **kwargs):
         self.stacked_convs = stacked_convs
         self.feat_mults = feat_mults
@@ -125,9 +122,9 @@ class SCRFDHead(AnchorHead):
             self.use_dfl = False
         self.use_scale = False
         self.use_kps = use_kps
-        if self.scale_mode>0 and (self.strides_share or self.scale_mode==2):
+        if self.scale_mode > 0 and (self.strides_share
+                                    or self.scale_mode == 2):
             self.use_scale = True
-        #print('USE-SCALE:', self.use_scale)
         super(SCRFDHead, self).__init__(num_classes, in_channels, **kwargs)
 
         self.sampling = False
@@ -140,10 +137,8 @@ class SCRFDHead(AnchorHead):
         self.integral = Integral(self.reg_max)
         if self.use_dfl:
             self.loss_dfl = build_loss(loss_dfl)
-        #print('USE_DFL:', self.use_dfl)
         self.loss_kps = build_loss(loss_kps)
         self.loss_kps_std = 1.0
-        #print(self.bbox_coder.__class__)
         self.train_step = 0
         self.pos_count = {}
         self.gtgroup_count = {}
@@ -153,28 +148,30 @@ class SCRFDHead(AnchorHead):
     def _get_conv_module(self, in_channel, out_channel):
         if not self.dw_conv:
             conv = ConvModule(
-                    in_channel,
-                    out_channel,
-                    3,
-                    stride=1,
-                    padding=1,
-                    conv_cfg=self.conv_cfg,
-                    norm_cfg=self.norm_cfg)
+                in_channel,
+                out_channel,
+                3,
+                stride=1,
+                padding=1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg)
         else:
             conv = DepthwiseSeparableConvModule(
-                    in_channel,
-                    out_channel,
-                    3,
-                    stride=1,
-                    padding=1,
-                    pw_norm_cfg=self.norm_cfg,
-                    dw_norm_cfg=self.norm_cfg)
+                in_channel,
+                out_channel,
+                3,
+                stride=1,
+                padding=1,
+                pw_norm_cfg=self.norm_cfg,
+                dw_norm_cfg=self.norm_cfg)
         return conv
 
     def _init_layers(self):
         """Initialize layers of the head."""
         self.relu = nn.ReLU(inplace=True)
-        conv_strides = [0] if self.strides_share else self.anchor_generator.strides
+        conv_strides = [
+            0
+        ] if self.strides_share else self.anchor_generator.strides
         self.cls_stride_convs = nn.ModuleDict()
         self.reg_stride_convs = nn.ModuleDict()
         self.stride_cls = nn.ModuleDict()
@@ -182,35 +179,40 @@ class SCRFDHead(AnchorHead):
         if self.use_kps:
             self.stride_kps = nn.ModuleDict()
         for stride_idx, conv_stride in enumerate(conv_strides):
-            #print('create convs for stride:', conv_stride)
             key = str(conv_stride)
             cls_convs = nn.ModuleList()
             reg_convs = nn.ModuleList()
-            stacked_convs = self.stacked_convs[stride_idx] if isinstance(self.stacked_convs, (list, tuple)) else self.stacked_convs
-            feat_mult = self.feat_mults[stride_idx] if self.feat_mults is not None else 1
-            feat_ch = int(self.feat_channels*feat_mult)
+            stacked_convs = self.stacked_convs[stride_idx] if isinstance(
+                self.stacked_convs, (list, tuple)) else self.stacked_convs
+            feat_mult = self.feat_mults[
+                stride_idx] if self.feat_mults is not None else 1
+            feat_ch = int(self.feat_channels * feat_mult)
+            last_feat_ch = -1
             for i in range(stacked_convs):
                 chn = self.in_channels if i == 0 else last_feat_ch
-                cls_convs.append( self._get_conv_module(chn, feat_ch) )
+                cls_convs.append(self._get_conv_module(chn, feat_ch))
                 if not self.cls_reg_share:
-                    reg_convs.append( self._get_conv_module(chn, feat_ch) )
+                    reg_convs.append(self._get_conv_module(chn, feat_ch))
                 last_feat_ch = feat_ch
             self.cls_stride_convs[key] = cls_convs
             self.reg_stride_convs[key] = reg_convs
             self.stride_cls[key] = nn.Conv2d(
-                feat_ch, self.cls_out_channels * self.num_anchors, 3, padding=1)
+                feat_ch,
+                self.cls_out_channels * self.num_anchors,
+                3,
+                padding=1)
             if not self.use_dfl:
                 self.stride_reg[key] = nn.Conv2d(
                     feat_ch, 4 * self.num_anchors, 3, padding=1)
             else:
                 self.stride_reg[key] = nn.Conv2d(
-                    feat_ch, 4 * (self.reg_max + 1) * self.num_anchors, 3, padding=1)
+                    feat_ch,
+                    4 * (self.reg_max + 1) * self.num_anchors,
+                    3,
+                    padding=1)
             if self.use_kps:
                 self.stride_kps[key] = nn.Conv2d(
-                    feat_ch, self.NK*2*self.num_anchors, 3, padding=1)
-        #assert self.num_anchors == 1, 'anchor free version'
-        #extra_gflops /= 1e9
-        #print('extra_gflops: %.6fG'%extra_gflops)
+                    feat_ch, self.NK * 2 * self.num_anchors, 3, padding=1)
         if self.use_scale:
             self.scales = nn.ModuleList(
                 [Scale(1.0) for _ in self.anchor_generator.strides])
@@ -220,13 +222,10 @@ class SCRFDHead(AnchorHead):
     def init_weights(self):
         """Initialize weights of the head."""
         for stride, cls_convs in self.cls_stride_convs.items():
-            #print('init cls for stride:', stride)
             for m in cls_convs:
                 if not self.dw_conv:
-                    try:
-                        normal_init(m.conv, std=0.01)
-                    except:
-                        pass
+                    normal_init(m.conv, std=0.01)
+
                 else:
                     normal_init(m.depthwise_conv.conv, std=0.01)
                     normal_init(m.pointwise_conv.conv, std=0.01)
@@ -237,9 +236,7 @@ class SCRFDHead(AnchorHead):
                 else:
                     normal_init(m.depthwise_conv.conv, std=0.01)
                     normal_init(m.pointwise_conv.conv, std=0.01)
-        #bias_cls = bias_init_with_prob(0.01)
         bias_cls = -4.595
-        #bias_cls = -1.595
         for stride, conv in self.stride_cls.items():
             normal_init(conv, std=0.01, bias=bias_cls)
         for stride, conv in self.stride_reg.items():
@@ -264,7 +261,8 @@ class SCRFDHead(AnchorHead):
                     scale levels, each is a 4D-tensor, the channel number is
                     4*(n+1), n is max value of integral set.
         """
-        return multi_apply(self.forward_single, feats, self.scales, self.anchor_generator.strides)
+        return multi_apply(self.forward_single, feats, self.scales,
+                           self.anchor_generator.strides)
 
     def forward_single(self, x, scale, stride):
         """Forward feature of a single scale level.
@@ -284,56 +282,44 @@ class SCRFDHead(AnchorHead):
         """
         cls_feat = x
         reg_feat = x
-        #print('forward_single in stride:', stride)
-        cls_convs = self.cls_stride_convs['0'] if self.strides_share else self.cls_stride_convs[str(stride)]
+        cls_convs = self.cls_stride_convs[
+            '0'] if self.strides_share else self.cls_stride_convs[str(stride)]
         for cls_conv in cls_convs:
             cls_feat = cls_conv(cls_feat)
         if not self.cls_reg_share:
-            reg_convs = self.reg_stride_convs['0'] if self.strides_share else self.reg_stride_convs[str(stride)]
+            reg_convs = self.reg_stride_convs[
+                '0'] if self.strides_share else self.reg_stride_convs[str(
+                    stride)]
             for reg_conv in reg_convs:
                 reg_feat = reg_conv(reg_feat)
         else:
             reg_feat = cls_feat
-        cls_pred_module = self.stride_cls['0'] if self.strides_share else self.stride_cls[str(stride)]
+        cls_pred_module = self.stride_cls[
+            '0'] if self.strides_share else self.stride_cls[str(stride)]
         cls_score = cls_pred_module(cls_feat)
-        reg_pred_module = self.stride_reg['0'] if self.strides_share else self.stride_reg[str(stride)]
+        reg_pred_module = self.stride_reg[
+            '0'] if self.strides_share else self.stride_reg[str(stride)]
         _bbox_pred = reg_pred_module(reg_feat)
         if self.use_scale:
             bbox_pred = scale(_bbox_pred)
         else:
             bbox_pred = _bbox_pred
         if self.use_kps:
-            kps_pred_module = self.stride_kps['0'] if self.strides_share else self.stride_kps[str(stride)]
+            kps_pred_module = self.stride_kps[
+                '0'] if self.strides_share else self.stride_kps[str(stride)]
             kps_pred = kps_pred_module(reg_feat)
         else:
-            kps_pred = bbox_pred.new_zeros( (bbox_pred.shape[0], self.NK*2, bbox_pred.shape[2], bbox_pred.shape[3]) )
+            kps_pred = bbox_pred.new_zeros(
+                (bbox_pred.shape[0], self.NK * 2, bbox_pred.shape[2],
+                 bbox_pred.shape[3]))
         if torch.onnx.is_in_onnx_export():
             assert not self.use_dfl
             print('in-onnx-export', cls_score.shape, bbox_pred.shape)
-            #print(scale.parameters())
-            #for p in scale.parameters():
-                #print(p.name, p.data)
-                #scale_val = p.data.item()
-                #print(scale_val)
-            #print('EEE1', cls_score.shape)
-            #cls_score = torch.sigmoid(cls_score).reshape(1, self.cls_out_channels, -1).permute(0, 2, 1)
-            #print('EEE2', cls_score.shape)
-            #if self.use_dfl:
-            #    bbox_pred = self.integral(bbox_pred) * stride[0]
-            #else:
-            #    bbox_pred = bbox_pred.reshape( (-1,4) ) * stride[0]
-            #if self.use_dfl:
-            #    bbox_pred = bbox_pred.reshape(1, (self.reg_max+1)*4, -1).permute(0, 2, 1)
-            #    bbox_pred = bbox_pred.reshape( (1, -1, 4, self.reg_max+1) )
-            #    bbox_pred = F.softmax(bbox_pred, dim=3)
-            #else:
-            #    bbox_pred = bbox_pred.reshape(1, 4, -1).permute(0, 2, 1)
-            #kps_pred = kps_pred.reshape(1, 10, -1).permute(0, 2, 1)
-
-            # Add output batch dim, based on pull request #1593
             batch_size = cls_score.shape[0]
-            cls_score = cls_score.permute(0, 2, 3, 1).reshape(batch_size, -1, self.cls_out_channels).sigmoid()
-            bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4)
+            cls_score = cls_score.permute(0, 2, 3, 1).reshape(
+                batch_size, -1, self.cls_out_channels).sigmoid()
+            bbox_pred = bbox_pred.permute(0, 2, 3,
+                                          1).reshape(batch_size, -1, 4)
             kps_pred = kps_pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 10)
 
         return cls_score, bbox_pred, kps_pred
@@ -370,8 +356,8 @@ class SCRFDHead(AnchorHead):
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
-            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss, img_metas)
-        #print('AAA', gt_bboxes[0].shape, gt_keypointss[0].shape)
+            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss,
+                                  img_metas)
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if proposal_cfg is None:
             return losses
@@ -422,8 +408,9 @@ class SCRFDHead(AnchorHead):
         anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
         return torch.stack([anchors_cx, anchors_cy], dim=-1)
 
-    def loss_single(self, anchors, cls_score, bbox_pred, kps_pred, labels, label_weights,
-                    bbox_targets, kps_targets, kps_weights, stride, num_total_samples):
+    def loss_single(self, anchors, cls_score, bbox_pred, kps_pred, labels,
+                    label_weights, bbox_targets, kps_targets, kps_weights,
+                    stride, num_total_samples):
         """Compute loss of a single scale level.
 
         Args:
@@ -453,21 +440,19 @@ class SCRFDHead(AnchorHead):
         cls_score = cls_score.permute(0, 2, 3,
                                       1).reshape(-1, self.cls_out_channels)
         if not self.use_dfl:
-            bbox_pred = bbox_pred.permute(0, 2, 3,
-                                          1).reshape(-1, 4)
+            bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
         else:
             bbox_pred = bbox_pred.permute(0, 2, 3,
-                                          1).reshape(-1, 4 * (self.reg_max + 1))
+                                          1).reshape(-1,
+                                                     4 * (self.reg_max + 1))
         bbox_targets = bbox_targets.reshape(-1, 4)
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
         if self.use_kps:
-            kps_pred = kps_pred.permute(0, 2, 3,
-                                          1).reshape(-1, self.NK*2)
-            kps_targets = kps_targets.reshape( (-1, self.NK*2) )
-            kps_weights = kps_weights.reshape( (-1, self.NK*2) )
-            #print('AAA000', kps_targets.shape, kps_weights.shape)
+            kps_pred = kps_pred.permute(0, 2, 3, 1).reshape(-1, self.NK * 2)
+            kps_targets = kps_targets.reshape((-1, self.NK * 2))
+            kps_weights = kps_weights.reshape((-1, self.NK * 2))
 
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
@@ -485,7 +470,6 @@ class SCRFDHead(AnchorHead):
             weight_targets = weight_targets.max(dim=1)[0][pos_inds]
             pos_decode_bbox_targets = pos_bbox_targets / stride[0]
 
-
             if self.use_dfl:
                 pos_bbox_pred_corners = self.integral(pos_bbox_pred)
                 pos_decode_bbox_pred = distance2bbox(pos_anchor_centers,
@@ -496,25 +480,13 @@ class SCRFDHead(AnchorHead):
             if self.use_kps:
                 pos_kps_targets = kps_targets[pos_inds]
                 pos_kps_pred = kps_pred[pos_inds]
-                #print('CCC000', kps_weights.shape)
-                pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds] * weight_targets
-                #pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds]
-                pos_kps_weights = pos_kps_weights.reshape( (-1, 1) )
-                #pos_kps_weights = kps_weights.max(dim=1, keepdims=True)[0][pos_inds]
-                #print('SSS', pos_kps_weights.sum())
+                pos_kps_weights = kps_weights.max(
+                    dim=1)[0][pos_inds] * weight_targets
+                pos_kps_weights = pos_kps_weights.reshape((-1, 1))
 
-                #pos_decode_kps_targets = pos_kps_targets / stride[0]
-                #pos_decode_kps_pred = distance2kps(pos_anchor_centers, pos_kps_pred)
-
-                pos_decode_kps_targets = kps2distance(pos_anchor_centers, pos_kps_targets / stride[0])
+                pos_decode_kps_targets = kps2distance(
+                    pos_anchor_centers, pos_kps_targets / stride[0])
                 pos_decode_kps_pred = pos_kps_pred
-                #print('ZZZ', pos_decode_kps_targets.shape, pos_decode_kps_pred.shape)
-                #print(pos_kps_weights[0,:].detach().cpu().numpy())
-                #print(pos_decode_kps_targets[0,:].detach().cpu().numpy())
-                #print(pos_decode_kps_pred[0,:].detach().cpu().numpy())
-
-
-                #print('CCC111', weight_targets.shape, pos_bbox_pred.shape, pos_decode_bbox_pred.shape, pos_kps_pred.shape, pos_decode_kps_pred.shape, pos_kps_weights.shape)
 
             if use_qscore:
                 score[pos_inds] = bbox_overlaps(
@@ -563,7 +535,6 @@ class SCRFDHead(AnchorHead):
             cls_score, (labels, score),
             weight=label_weights,
             avg_factor=num_total_samples)
-
 
         return loss_cls, loss_bbox, loss_dfl, loss_kps, weight_targets.sum()
 
@@ -618,7 +589,8 @@ class SCRFDHead(AnchorHead):
             return None
 
         (anchor_list, labels_list, label_weights_list, bbox_targets_list,
-         bbox_weights_list, keypoints_targets_list, keypoints_weights_list, num_total_pos, num_total_neg) = cls_reg_targets
+         bbox_weights_list, keypoints_targets_list, keypoints_weights_list,
+         num_total_pos, num_total_neg) = cls_reg_targets
 
         num_total_samples = reduce_mean(
             torch.tensor(num_total_pos, dtype=torch.float,
@@ -639,11 +611,6 @@ class SCRFDHead(AnchorHead):
                 keypoints_weights_list,
                 self.anchor_generator.strides,
                 num_total_samples=num_total_samples)
-
-        #if self.train_step%100==0:
-        #    print('loss_cls:', losses_cls)
-        #    print('avg_factor:', avg_factor)
-
 
         avg_factor = sum(avg_factor)
         avg_factor = reduce_mean(avg_factor).item()
@@ -804,7 +771,7 @@ class SCRFDHead(AnchorHead):
             if self.use_dfl:
                 bbox_pred = self.integral(bbox_pred) * stride[0]
             else:
-                bbox_pred = bbox_pred.reshape( (-1,4) ) * stride[0]
+                bbox_pred = bbox_pred.reshape((-1, 4)) * stride[0]
 
             nms_pre = cfg.get('nms_pre', -1)
             if nms_pre > 0 and scores.shape[0] > nms_pre:
@@ -874,9 +841,8 @@ class SCRFDHead(AnchorHead):
             gt_labels_list = [None for _ in range(num_imgs)]
         if gt_keypointss_list is None:
             gt_keypointss_list = [None for _ in range(num_imgs)]
-        #print('QQQ:', num_imgs, gt_bboxes_list[0].shape)
         (all_anchors, all_labels, all_label_weights, all_bbox_targets,
-         all_bbox_weights, all_keypoints_targets, all_keypoints_weights, 
+         all_bbox_weights, all_keypoints_targets, all_keypoints_weights,
          pos_inds_list, neg_inds_list) = multi_apply(
              self._get_target_single,
              anchor_list,
@@ -905,13 +871,12 @@ class SCRFDHead(AnchorHead):
         bbox_weights_list = images_to_levels(all_bbox_weights,
                                              num_level_anchors)
         keypoints_targets_list = images_to_levels(all_keypoints_targets,
-                                             num_level_anchors)
+                                                  num_level_anchors)
         keypoints_weights_list = images_to_levels(all_keypoints_weights,
-                                             num_level_anchors)
+                                                  num_level_anchors)
         return (anchors_list, labels_list, label_weights_list,
-                bbox_targets_list, bbox_weights_list, keypoints_targets_list, keypoints_weights_list,
-                num_total_pos,
-                num_total_neg)
+                bbox_targets_list, bbox_weights_list, keypoints_targets_list,
+                keypoints_weights_list, num_total_pos, num_total_neg)
 
     def _get_target_single(self,
                            flat_anchors,
@@ -956,7 +921,7 @@ class SCRFDHead(AnchorHead):
                     image with shape (N, 4).
                 bbox_weights (Tensor): BBox weights of all anchors in the
                     image with shape (N, 4).
-                pos_inds (Tensor): Indices of postive anchor with shape
+                pos_inds (Tensor): Indices of positive anchor with shape
                     (num_pos,).
                 neg_inds (Tensor): Indices of negative anchor with shape
                     (num_neg,).
@@ -971,14 +936,14 @@ class SCRFDHead(AnchorHead):
 
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
-        if self.assigner.__class__.__name__=='ATSSAssigner':
-            assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
+        if self.assigner.__class__.__name__ == 'ATSSAssigner':
+            assign_result = self.assigner.assign(anchors,
+                                                 num_level_anchors_inside,
                                                  gt_bboxes, gt_bboxes_ignore,
                                                  gt_labels)
         else:
-            assign_result = self.assigner.assign(anchors, 
-                                                 gt_bboxes, gt_bboxes_ignore,
-                                                 gt_labels)
+            assign_result = self.assigner.assign(anchors, gt_bboxes,
+                                                 gt_bboxes_ignore, gt_labels)
 
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes)
@@ -986,8 +951,8 @@ class SCRFDHead(AnchorHead):
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
-        kps_targets = anchors.new_zeros(size=(anchors.shape[0], self.NK*2))
-        kps_weights = anchors.new_zeros(size=(anchors.shape[0], self.NK*2))
+        kps_targets = anchors.new_zeros(size=(anchors.shape[0], self.NK * 2))
+        kps_weights = anchors.new_zeros(size=(anchors.shape[0], self.NK * 2))
         labels = anchors.new_full((num_valid_anchors, ),
                                   self.num_classes,
                                   dtype=torch.long)
@@ -1001,10 +966,12 @@ class SCRFDHead(AnchorHead):
             bbox_weights[pos_inds, :] = 1.0
             if self.use_kps:
                 pos_assigned_gt_inds = sampling_result.pos_assigned_gt_inds
-                #print('BBB', anchors.shape, gt_bboxes.shape, gt_keypointss.shape, pos_inds.shape, bbox_targets.shape, pos_bbox_targets.shape)
-                kps_targets[pos_inds, :] = gt_keypointss[pos_assigned_gt_inds,:,:2].reshape( (-1, self.NK*2) )
-                kps_weights[pos_inds, :] = torch.mean(gt_keypointss[pos_assigned_gt_inds,:,2], dim=1, keepdims=True)
-            #kps_weights[pos_inds, :] = 1.0
+                kps_targets[pos_inds, :] = gt_keypointss[
+                    pos_assigned_gt_inds, :, :2].reshape((-1, self.NK * 2))
+                kps_weights[pos_inds, :] = torch.mean(
+                    gt_keypointss[pos_assigned_gt_inds, :, 2],
+                    dim=1,
+                    keepdims=True)
             if gt_labels is None:
                 # Only rpn gives gt_labels as None
                 # Foreground is the first class
@@ -1030,12 +997,13 @@ class SCRFDHead(AnchorHead):
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
             if self.use_kps:
-                kps_targets = unmap(kps_targets, num_total_anchors, inside_flags)
-                kps_weights = unmap(kps_weights, num_total_anchors, inside_flags)
+                kps_targets = unmap(kps_targets, num_total_anchors,
+                                    inside_flags)
+                kps_weights = unmap(kps_weights, num_total_anchors,
+                                    inside_flags)
 
         return (anchors, labels, label_weights, bbox_targets, bbox_weights,
-                kps_targets, kps_weights,
-                pos_inds, neg_inds)
+                kps_targets, kps_weights, pos_inds, neg_inds)
 
     def get_num_level_anchors_inside(self, num_level_anchors, inside_flags):
         split_inside_flags = torch.split(inside_flags, num_level_anchors)

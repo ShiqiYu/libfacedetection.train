@@ -1,13 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from collections import OrderedDict
+
+import torch
 from mmcv.runner.hooks import HOOKS
 from mmcv.runner.hooks.logger import TextLoggerHook
-import torch
-import datetime
-from collections import OrderedDict
+
 
 @HOOKS.register_module()
 class YuNetTextLoggerHook(TextLoggerHook):
-    """Log input size. """
+    """Log input size."""
 
     def log(self, runner):
         if 'eval_iter_num' in runner.log_buffer.output:
@@ -39,7 +40,8 @@ class YuNetTextLoggerHook(TextLoggerHook):
 
         log_dict = dict(log_dict, **runner.log_buffer.output)
 
-        log_dict['image_scale'] = runner.data_batch['img_metas'].data[0][0]['img_shape'][:2]
+        log_dict['image_scale'] = runner.data_batch['img_metas'].data[0][0][
+            'img_shape'][:2]
 
         self._log_info(log_dict, runner)
         self._dump_log(log_dict, runner)

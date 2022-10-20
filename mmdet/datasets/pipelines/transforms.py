@@ -143,13 +143,10 @@ class Resize:
         assert mmcv.is_list_of(img_scales, tuple) and len(img_scales) == 1
         img_scale_high = max(img_scales[0])
         img_scale_low = min(img_scales[0])
-        out_edge = np.random.randint(
-            img_scale_low,
-            img_scale_high + 1)
+        out_edge = np.random.randint(img_scale_low, img_scale_high + 1)
         out_edge = out_edge // 32 * 32
         img_scale = (out_edge, out_edge)
         return img_scale, None
-
 
     @staticmethod
     def random_sample(img_scales):
@@ -288,15 +285,16 @@ class Resize:
         for key in results.get('keypoints_fields', []):
             keypointss = results[key].copy()
             factors = results['scale_factor']
-            assert factors[0]==factors[2]
-            assert factors[1]==factors[3]
-            #print('AAA', results['scale_factor'])
-            keypointss[:,:,0] *= factors[0]
-            keypointss[:,:,1] *= factors[1]
+            assert factors[0] == factors[2]
+            assert factors[1] == factors[3]
+            keypointss[:, :, 0] *= factors[0]
+            keypointss[:, :, 1] *= factors[1]
             if self.bbox_clip_border:
                 img_shape = results['img_shape']
-                keypointss[:,:, 0] = np.clip(keypointss[:,:, 0], 0, img_shape[1])
-                keypointss[:,:, 1] = np.clip(keypointss[:,:, 1], 0, img_shape[0])
+                keypointss[:, :, 0] = np.clip(keypointss[:, :, 0], 0,
+                                              img_shape[1])
+                keypointss[:, :, 1] = np.clip(keypointss[:, :, 1], 0,
+                                              img_shape[0])
             results[key] = keypointss
 
     def _resize_masks(self, results):
@@ -476,13 +474,13 @@ class RandomFlip:
 
         assert direction == 'horizontal'
         assert keypointss.shape[-1] == 3
-        assert keypointss.shape[1]==5
+        assert keypointss.shape[1] == 5
 
-        assert keypointss.ndim==3
+        assert keypointss.ndim == 3
         flipped = keypointss.copy()
-        flip_order = [1,0,2,4,3]
+        flip_order = [1, 0, 2, 4, 3]
         for idx, a in enumerate(flip_order):
-            flipped[:,idx,:] = keypointss[:,a,:]
+            flipped[:, idx, :] = keypointss[:, a, :]
         w = img_shape[1]
         flipped[..., 0] = w - flipped[..., 0]
         return flipped
@@ -532,11 +530,11 @@ class RandomFlip:
                 results[key] = self.bbox_flip(results[key],
                                               results['img_shape'],
                                               results['flip_direction'])
-            # flip keypoints                            
+            # flip keypoints
             for key in results.get('keypoints_fields', []):
                 results[key] = self.keypoints_flip(results[key],
-                                              results['img_shape'],
-                                              results['flip_direction'])
+                                                   results['img_shape'],
+                                                   results['flip_direction'])
             # flip masks
             for key in results.get('mask_fields', []):
                 results[key] = results[key].flip(results['flip_direction'])
@@ -970,6 +968,7 @@ class RandomCrop:
         repr_str += f'bbox_clip_border={self.bbox_clip_border})'
         return repr_str
 
+
 @PIPELINES.register_module()
 class RandomSquareCrop(object):
     """Random crop the image & bboxes, the cropped patches have minimum IoU
@@ -988,7 +987,10 @@ class RandomSquareCrop(object):
         `gt_bboxes_ignore` to `gt_labels_ignore` and `gt_masks_ignore`.
     """
 
-    def __init__(self, crop_ratio_range=None, crop_choice=None, bbox_clip_border=True):
+    def __init__(self,
+                 crop_ratio_range=None,
+                 crop_choice=None,
+                 bbox_clip_border=True):
 
         self.crop_ratio_range = crop_ratio_range
         self.crop_choice = crop_choice
@@ -1026,28 +1028,27 @@ class RandomSquareCrop(object):
         assert 'bbox_fields' in results
         assert 'gt_bboxes' in results
         boxes = results['gt_bboxes']
-        #boxes = [results[key] for key in results['bbox_fields']]
-        #boxes = np.concatenate(boxes, 0)
+        # boxes = [results[key] for key in results['bbox_fields']]
+        # boxes = np.concatenate(boxes, 0)
         h, w, c = img.shape
         scale_retry = 0
         if self.crop_ratio_range is not None:
             max_scale = self.crop_ratio_max
         else:
             max_scale = np.amax(self.crop_choice)
-        #max_scale = max(max_scale, float(max(w,h))/min(w,h))
+        # max_scale = max(max_scale, float(max(w,h))/min(w,h))
 
         while True:
             scale_retry += 1
 
-            if scale_retry==1 or max_scale>1.0:
+            if scale_retry == 1 or max_scale > 1.0:
                 if self.crop_ratio_range is not None:
                     scale = np.random.uniform(self.crop_ratio_min,
                                               self.crop_ratio_max)
                 elif self.crop_choice is not None:
                     scale = np.random.choice(self.crop_choice)
             else:
-                #scale = min(scale*1.2, max_scale)
-                scale = scale*1.2
+                scale = scale * 1.2
 
             # print(scale, img.shape[:2], boxes)
             # import cv2
@@ -1059,23 +1060,24 @@ class RandomSquareCrop(object):
                 ch = cw
 
                 # TODO +1
-                if w==cw:
+                if w == cw:
                     left = 0
-                elif w>cw:
-                    #left = random.uniform(w - cw)
+                elif w > cw:
+                    # left = random.uniform(w - cw)
                     left = random.randint(0, w - cw)
                 else:
                     left = random.randint(w - cw, 0)
-                if h==ch:
+                if h == ch:
                     top = 0
-                elif h>ch:
-                    #top = random.uniform(h - ch)
+                elif h > ch:
+                    # top = random.uniform(h - ch)
                     top = random.randint(0, h - ch)
                 else:
                     top = random.randint(h - ch, 0)
 
                 patch = np.array(
-                    (int(left), int(top), int(left + cw), int(top + ch)), dtype=np.int)
+                    (int(left), int(top), int(left + cw), int(top + ch)),
+                    dtype=np.int)
 
                 # center of boxes should inside the crop img
                 # only adjust boxes and instance masks when the gt is not empty
@@ -1094,7 +1096,7 @@ class RandomSquareCrop(object):
                     continue
                 for key in results.get('bbox_fields', []):
                     boxes = results[key].copy()
-                    #print('BBB', key, boxes.shape)
+                    # print('BBB', key, boxes.shape)
                     mask = is_center_of_bboxes_in_patch(boxes, patch)
                     boxes = boxes[mask]
                     if self.bbox_clip_border:
@@ -1109,17 +1111,20 @@ class RandomSquareCrop(object):
                         results[label_key] = results[label_key][mask]
 
                     # keypoints field
-                    if key=='gt_bboxes':
+                    if key == 'gt_bboxes':
                         for kps_key in results.get('keypoints_fields', []):
                             keypointss = results[kps_key].copy()
-                            #print('AAAA', kps_key, keypointss.shape, mask.shape)
-                            keypointss = keypointss[mask,:,:]
+                            keypointss = keypointss[mask, :, :]
                             if self.bbox_clip_border:
-                                keypointss[:,:,:2] = keypointss[:,:,:2].clip(max=patch[2:])
-                                keypointss[:,:,:2] = keypointss[:,:,:2].clip(min=patch[:2])
-                            #keypointss[:,:,:2] -= np.tile(patch[:2], 2)
-                            keypointss[:,:,0] -= patch[0]
-                            keypointss[:,:,1] -= patch[1]
+                                keypointss[:, :, :
+                                           2] = keypointss[:, :, :2].clip(
+                                               max=patch[2:])
+                                keypointss[:, :, :
+                                           2] = keypointss[:, :, :2].clip(
+                                               min=patch[:2])
+                            # keypointss[:,:,:2] -= np.tile(patch[:2], 2)
+                            keypointss[:, :, 0] -= patch[0]
+                            keypointss[:, :, 1] -= patch[1]
                             results[kps_key] = keypointss
 
                     # mask fields
@@ -1129,26 +1134,28 @@ class RandomSquareCrop(object):
                                                               [0]].crop(patch)
 
                 # adjust the img no matter whether the gt is empty before crop
-                #img = img[patch[1]:patch[3], patch[0]:patch[2]]
-                rimg = np.ones( (ch, cw, 3), dtype=img.dtype) * 128
+                # img = img[patch[1]:patch[3], patch[0]:patch[2]]
+                rimg = np.ones((ch, cw, 3), dtype=img.dtype) * 128
                 patch_from = patch.copy()
                 patch_from[0] = max(0, patch_from[0])
                 patch_from[1] = max(0, patch_from[1])
                 patch_from[2] = min(img.shape[1], patch_from[2])
                 patch_from[3] = min(img.shape[0], patch_from[3])
                 patch_to = patch.copy()
-                patch_to[0] = max(0, patch_to[0]*-1)
-                patch_to[1] = max(0, patch_to[1]*-1)
+                patch_to[0] = max(0, patch_to[0] * -1)
+                patch_to[1] = max(0, patch_to[1] * -1)
                 patch_to[2] = patch_to[0] + (patch_from[2] - patch_from[0])
                 patch_to[3] = patch_to[1] + (patch_from[3] - patch_from[1])
-                rimg[patch_to[1]:patch_to[3], patch_to[0]:patch_to[2],:] = img[patch_from[1]:patch_from[3], patch_from[0]:patch_from[2], :]
-                #print(img.shape, scale, patch, patch_from, patch_to, rimg.shape)
+                rimg[patch_to[1]:patch_to[3],
+                     patch_to[0]:patch_to[2], :] = img[
+                         patch_from[1]:patch_from[3],
+                         patch_from[0]:patch_from[2], :]
                 img = rimg
                 results['img'] = img
                 results['img_shape'] = img.shape
 
                 # seg fields
-                #for key in results.get('seg_fields', []):
+                # for key in results.get('seg_fields', []):
                 #    results[key] = results[key][patch[1]:patch[3],
                 #                                patch[0]:patch[2]]
                 return results
@@ -1158,6 +1165,7 @@ class RandomSquareCrop(object):
         repr_str += f'(min_ious={self.min_iou}, '
         repr_str += f'crop_size={self.crop_size})'
         return repr_str
+
 
 @PIPELINES.register_module()
 class SegRescale:
@@ -2324,7 +2332,7 @@ class Mosaic:
         mosaic_labels = []
         mosaic_bboxes = []
         if self.use_kps:
-            mosaic_kpss= []
+            mosaic_kpss = []
         if len(results['img'].shape) == 3:
             mosaic_img = np.full(
                 (int(self.img_scale[0] * 2), int(self.img_scale[1] * 2), 3),
@@ -2385,7 +2393,6 @@ class Mosaic:
                     gt_kpss_i[:, :, 1] = \
                         scale_ratio_i * gt_kpss_i[:, :, 1] + padh
 
-
             mosaic_bboxes.append(gt_bboxes_i)
             mosaic_labels.append(gt_labels_i)
             if self.use_kps:
@@ -2402,16 +2409,16 @@ class Mosaic:
                                                  2 * self.img_scale[0])
                 if self.use_kps:
                     mosaic_kpss[..., 0] = np.clip(mosaic_kpss[..., 0], 0,
-                                                    2 * self.img_scale[1])
+                                                  2 * self.img_scale[1])
                     mosaic_kpss[..., 1] = np.clip(mosaic_kpss[..., 1], 0,
-                                                    2 * self.img_scale[0])                    
-                    
+                                                  2 * self.img_scale[0])
 
             # TODO kps skip filter
             if not self.skip_filter:
                 valid_inds = \
                     self._filter_box_candidates(mosaic_bboxes)
-                mosaic_bboxes, mosaic_labels = mosaic_bboxes[valid_inds], mosaic_labels[valid_inds]
+                mosaic_bboxes, mosaic_labels = mosaic_bboxes[
+                    valid_inds], mosaic_labels[valid_inds]
                 if self.use_kps:
                     mosaic_kpss = mosaic_kpss[valid_inds]
         # remove outside bboxes
@@ -2422,7 +2429,6 @@ class Mosaic:
         if self.use_kps:
             mosaic_kpss = mosaic_kpss[inside_inds]
             results['gt_keypointss'] = mosaic_kpss
-
 
         results['img'] = mosaic_img
         results['img_shape'] = mosaic_img.shape

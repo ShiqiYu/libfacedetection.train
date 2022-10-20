@@ -1,15 +1,11 @@
 import argparse
-from pyexpat import model
-import numpy as np
-
-import torch
-from mmcv import Config
-from mmcv.runner import (load_checkpoint)
-
-from mmdet.models import build_detector
 
 import cv2
+import numpy as np
+import torch
+from mmcv import Config
 
+from mmdet.models import build_detector
 
 
 def parse_args():
@@ -17,20 +13,16 @@ def parse_args():
         description='MMDet test (and eval) a model')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
-    parser.add_argument('image', help="input image")
+    parser.add_argument('image', help='input image')
     parser.add_argument(
-        '--thr',
-        type=float,
-        default=-1.,
-        help='score threshold')
-    parser.add_argument('--out', type=str, default="./result.jpg")    
+        '--thr', type=float, default=-1., help='score threshold')
+    parser.add_argument('--out', type=str, default='./result.jpg')
     args = parser.parse_args()
     return args
 
 
 def main():
     args = parse_args()
-
 
     cfg = Config.fromfile(args.config)
     if cfg.get('custom_imports', None):
@@ -58,7 +50,6 @@ def main():
             ds_cfg.test_mode = True
 
     model = build_detector(cfg.model, train_cfg=None, test_cfg=None)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
     model.eval()
 
     image = cv2.imread(args.image)
@@ -67,8 +58,8 @@ def main():
     image_tensor = image_tensor.permute(2, 0, 1).unsqueeze(0)
 
     with torch.no_grad():
-        result = model.simple_test(image_tensor, None)         
-    assert len(result)==1
+        result = model.simple_test(image_tensor, None)
+    assert len(result) == 1
     result = result[0][0]
     draw(image, result, None, args.out, True)
 
@@ -76,17 +67,17 @@ def main():
 def draw(img, bboxes, kpss, out_path, with_kps=True):
     for i in range(bboxes.shape[0]):
         bbox = bboxes[i]
-        x1,y1,x2,y2,score = bbox.astype(np.int32)
-        cv2.rectangle(img, (x1,y1), (x2,y2), (0,0,255) , 2)
+        x1, y1, x2, y2, score = bbox.astype(np.int32)
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
         if with_kps:
             if kpss is not None:
                 kps = kpss[i].reshape(-1, 2)
                 for kp in kps:
                     kp = kp.astype(np.int32)
-                    cv2.circle(img, tuple(kp) , 1, (255,0,0) , 2)
-        
+                    cv2.circle(img, tuple(kp), 1, (255, 0, 0), 2)
+
     print('output:', out_path)
-    cv2.imwrite(out_path, img) 
+    cv2.imwrite(out_path, img)
 
 
 if __name__ == '__main__':

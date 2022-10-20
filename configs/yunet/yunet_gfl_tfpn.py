@@ -6,10 +6,13 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=1500,
     warmup_ratio=0.001,
-    step=[55*lr_mult, 68*lr_mult])
-total_epochs = 80*lr_mult
+    step=[55 * lr_mult, 68 * lr_mult])
+total_epochs = 80 * lr_mult
 checkpoint_config = dict(interval=80)
-log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=50,
+    hooks=[dict(type='TextLoggerHook'),
+           dict(type='TensorboardLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
@@ -153,13 +156,13 @@ model = dict(
     type='YuNet',
     backbone=dict(
         type='YuNetBackbone',
-        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64], [64, 64], [64, 64]],
+        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64],
+                        [64, 64], [64, 64]],
         downsample_idx=[0, 2, 3, 4, 5],
         out_idx=[3, 4, 5, 6]),
     neck=dict(
-        type='WWHead_TFPN',
-        in_channels=[64, 64, 64, 64],
-        out_idx=[0, 1, 2, 3]),
+        type='WWHead_TFPN', in_channels=[64, 64, 64, 64], out_idx=[0, 1, 2,
+                                                                   3]),
     bbox_head=dict(
         type='WWHead_GFL',
         num_classes=1,
@@ -181,8 +184,7 @@ model = dict(
         use_kps=True,
         kps_num=5,
         loss_kps=dict(
-            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1
-        )),
+            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1)),
     train_cfg=dict(
         assigner=dict(type='ATSSAssigner', topk=9),
         allowed_border=-1,
@@ -195,8 +197,7 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.45),
         max_per_img=-1,
         # rescale=True
-    )    
-)
+    ))
 epoch_multi = 1
 evaluation = dict(interval=160, metric='mAP')
 # custom_hooks = [

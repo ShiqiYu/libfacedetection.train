@@ -108,6 +108,7 @@ def draw_bboxes(ax, bboxes, color='g', alpha=0.8, thickness=2):
 
     return ax
 
+
 def draw_kps(ax, kps, color='g'):
     """Draw bounding boxes on the axes.
 
@@ -125,10 +126,10 @@ def draw_kps(ax, kps, color='g'):
     """
     kps_int = kps.astype(np.int32)
 
-    ax.scatter(kps_int[:, 0], kps_int[:, 1], c=color/255, marker='.')
-
+    ax.scatter(kps_int[:, 0], kps_int[:, 1], c=color / 255, marker='.')
 
     return ax
+
 
 def draw_labels(ax,
                 labels,
@@ -553,5 +554,3 @@ def imshow_gt_det_bboxes(img,
         wait_time=wait_time,
         out_file=out_file)
     return img
-
-

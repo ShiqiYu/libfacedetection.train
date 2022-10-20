@@ -118,11 +118,12 @@ def main():
         kps_ignore = True
         if kps_ignore:
             kps = gt_kps[..., :-1]
-            kps_flag = np.mean(gt_kps[..., 2], axis=1, keepdims=True).squeeze(1) > 0
+            kps_flag = np.mean(
+                gt_kps[..., 2], axis=1, keepdims=True).squeeze(1) > 0
             gt_kps = kps[kps_flag].reshape(-1, 2)
         else:
             # kps = kps[..., :-1].reshape(num_gt, -1)
-            assert "This dataset has kps ignore flag!"
+            assert 'This dataset has kps ignore flag!'
         imshow_det_bboxes(
             item['img'],
             gt_bboxes,

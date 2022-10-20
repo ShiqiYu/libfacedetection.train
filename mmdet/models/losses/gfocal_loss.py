@@ -1,8 +1,9 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import mmcv
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+
 from ..builder import LOSSES
 from .utils import weighted_loss
 

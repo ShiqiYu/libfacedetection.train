@@ -1,23 +1,16 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-import math
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from mmcv.ops.nms import batched_nms
 from mmcv.runner import force_fp32
 
-from mmdet.core import (MlvlPointGenerator, bbox_xyxy_to_cxcywh,
-                        build_assigner, build_sampler, multi_apply,
-                        reduce_mean)
+from mmdet.core import build_assigner, build_sampler, multi_apply, reduce_mean
 from mmdet.core.anchor.builder import build_prior_generator
 from ..builder import HEADS, build_loss
+from ..utils.yunet_layer import ConvDPUnit
 from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin
-
-from ..utils.yunet_layer import ConvDPUnit
 
 
 @HEADS.register_module()
@@ -51,35 +44,36 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         init_cfg (dict or list[dict], optional): Initialization config dict.
     """
 
-    def __init__(self,
-                 num_classes,
-                 in_channels,
-                 feat_channels=256,
-                 shared_stacked_convs=2,
-                 stacked_convs=2,
-                 loss_cls=dict(
-                     type='CrossEntropyLoss',
-                     use_sigmoid=True,
-                     reduction='sum',
-                     loss_weight=1.0),
-                 loss_bbox=dict(
-                     type='IoULoss',
-                     mode='square',
-                     eps=1e-16,
-                     reduction='sum',
-                     loss_weight=5.0),
-                use_kps=False,
-                kps_num=5,
-                loss_kps=None,
-                prior_generator=None,
-                 train_cfg=None,
-                 test_cfg=None,
-                loss_obj=dict(
-                     type='CrossEntropyLoss',
-                     use_sigmoid=True,
-                     reduction='sum',
-                     loss_weight=1.0),
-                ):
+    def __init__(
+        self,
+        num_classes,
+        in_channels,
+        feat_channels=256,
+        shared_stacked_convs=2,
+        stacked_convs=2,
+        loss_cls=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+            reduction='sum',
+            loss_weight=1.0),
+        loss_bbox=dict(
+            type='IoULoss',
+            mode='square',
+            eps=1e-16,
+            reduction='sum',
+            loss_weight=5.0),
+        use_kps=False,
+        kps_num=5,
+        loss_kps=None,
+        prior_generator=None,
+        train_cfg=None,
+        test_cfg=None,
+        loss_obj=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+            reduction='sum',
+            loss_weight=1.0),
+    ):
 
         super().__init__()
         self.num_classes = num_classes
@@ -91,7 +85,6 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         self.use_sigmoid_cls = True
         self.use_kps = use_kps
         self.shared_stack_convs = shared_stacked_convs
-
 
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
@@ -132,24 +125,34 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
                 single_level_share_convs = []
                 for i in range(self.shared_stack_convs):
                     chn = self.in_channels if i == 0 else self.feat_channels
-                    single_level_share_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_share_convs.append(nn.Sequential(*single_level_share_convs))
+                    single_level_share_convs.append(
+                        ConvDPUnit(chn, self.feat_channels))
+                self.multi_level_share_convs.append(
+                    nn.Sequential(*single_level_share_convs))
 
             if self.stacked_convs > 0:
                 single_level_cls_convs = []
                 single_level_reg_convs = []
                 for i in range(self.stacked_convs):
-                    chn = self.in_channels if i == 0 and self.shared_stack_convs == 0 else self.feat_channels
-                    single_level_cls_convs.append(ConvDPUnit(chn, self.feat_channels))
-                    single_level_reg_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_reg_convs.append(nn.Sequential(*single_level_reg_convs))
-                self.multi_level_cls_convs.append(nn.Sequential(*single_level_cls_convs))
+                    chn = self.in_channels if i == 0 and \
+                        self.shared_stack_convs == 0 else self.feat_channels
+                    single_level_cls_convs.append(
+                        ConvDPUnit(chn, self.feat_channels))
+                    single_level_reg_convs.append(
+                        ConvDPUnit(chn, self.feat_channels))
+                self.multi_level_reg_convs.append(
+                    nn.Sequential(*single_level_reg_convs))
+                self.multi_level_cls_convs.append(
+                    nn.Sequential(*single_level_cls_convs))
 
-            chn = self.in_channels if self.stacked_convs == 0 and self.shared_stack_convs == 0 else self.feat_channels
-            self.multi_level_cls.append(ConvDPUnit(chn, self.num_classes, False))
+            chn = self.in_channels if self.stacked_convs == 0 and \
+                self.shared_stack_convs == 0 else self.feat_channels
+            self.multi_level_cls.append(
+                ConvDPUnit(chn, self.num_classes, False))
             self.multi_level_bbox.append(ConvDPUnit(chn, 4, False))
             if self.use_kps:
-                self.multi_level_kps.append(ConvDPUnit(chn, self.NK * 2, False))
+                self.multi_level_kps.append(
+                    ConvDPUnit(chn, self.NK * 2, False))
             self.multi_level_obj.append(ConvDPUnit(chn, 1, False))
 
     def init_weights(self):
@@ -164,7 +167,7 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
         # bias_cls = -4.595
-        # for m in self.cls_convs.modules():   
+        # for m in self.cls_convs.modules():
         #     if isinstance(m, nn.Conv2d):
         #         if m.bias is not None:
         #             m.bias.data.fill_(bias_cls)
@@ -180,29 +183,66 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
                 4D-tensor of shape (batch_size, 5+num_classes, height, width).
         """
         if self.shared_stack_convs > 0:
-            feats = [convs(feat) for feat, convs in zip(feats, self.multi_level_share_convs)]
-                    
+            feats = [
+                convs(feat)
+                for feat, convs in zip(feats, self.multi_level_share_convs)
+            ]
+
         if self.stacked_convs > 0:
             feats_cls, feats_reg = [], []
             for i in range(self.strides_num):
-                feats_cls.append(self.multi_level_cls_convs[i](feats[i]))  
+                feats_cls.append(self.multi_level_cls_convs[i](feats[i]))
                 feats_reg.append(self.multi_level_reg_convs[i](feats[i]))
-            cls_preds = [convs(feat) for feat, convs in zip(feats_cls, self.multi_level_cls)]
-            bbox_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_bbox)]
-            obj_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_obj)]
-            kps_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_kps)]
+            cls_preds = [
+                convs(feat)
+                for feat, convs in zip(feats_cls, self.multi_level_cls)
+            ]
+            bbox_preds = [
+                convs(feat)
+                for feat, convs in zip(feats_reg, self.multi_level_bbox)
+            ]
+            obj_preds = [
+                convs(feat)
+                for feat, convs in zip(feats_reg, self.multi_level_obj)
+            ]
+            kps_preds = [
+                convs(feat)
+                for feat, convs in zip(feats_reg, self.multi_level_kps)
+            ]
         else:
-            cls_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_cls)]
-            bbox_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_bbox)]
-            obj_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_obj)]
-            kps_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_kps)]
-        
+            cls_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_cls)
+            ]
+            bbox_preds = [
+                convs(feat)
+                for feat, convs in zip(feats, self.multi_level_bbox)
+            ]
+            obj_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_obj)
+            ]
+            kps_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_kps)
+            ]
+
         if torch.onnx.is_in_onnx_export():
             batch_size = cls_preds[0].shape[0]
-            cls = [f.permute(0, 2, 3, 1).view(batch_size, -1, self.num_classes).sigmoid() for f in cls_preds]
-            obj = [f.permute(0, 2, 3, 1).view(batch_size, -1, 1).sigmoid() for f in obj_preds]
-            bbox = [f.permute(0, 2, 3, 1).view(batch_size, -1, 4) for f in bbox_preds]
-            kps = [f.permute(0, 2, 3, 1).view(batch_size, -1, self.NK * 2) for f in kps_preds]
+            cls = [
+                f.permute(0, 2, 3, 1).view(batch_size, -1,
+                                           self.num_classes).sigmoid()
+                for f in cls_preds
+            ]
+            obj = [
+                f.permute(0, 2, 3, 1).view(batch_size, -1, 1).sigmoid()
+                for f in obj_preds
+            ]
+            bbox = [
+                f.permute(0, 2, 3, 1).view(batch_size, -1, 4)
+                for f in bbox_preds
+            ]
+            kps = [
+                f.permute(0, 2, 3, 1).view(batch_size, -1, self.NK * 2)
+                for f in kps_preds
+            ]
             return (cls, obj, bbox, kps)
 
         return cls_preds, bbox_preds, obj_preds, kps_preds
@@ -239,7 +279,8 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
-            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss, img_metas)      
+            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss,
+                                  img_metas)
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if proposal_cfg is None:
             return losses
@@ -346,16 +387,19 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         return decoded_bboxes
 
     def _kps_decode(self, priors, kps_preds):
-        num_points = int(kps_preds.shape[-1] / 2)        
-        decoded_kps = torch.cat([(kps_preds[..., [2 * i, 2 * i + 1]] * priors[..., 2:]) + priors[..., :2] \
-            for i in range(num_points)], -1)           
+        num_points = int(kps_preds.shape[-1] / 2)
+        decoded_kps = torch.cat(
+            [(kps_preds[..., [2 * i, 2 * i + 1]] * priors[..., 2:]) +
+             priors[..., :2] for i in range(num_points)], -1)
         return decoded_kps
 
     def _kps_encode(self, priors, kps):
-        num_points = int(kps.shape[-1] / 2)        
-        encoded_kps = [(kps[..., [2 * i, 2 * i + 1]] - priors[..., :2]) / priors[..., 2:] \
-            for i in range(num_points)]
-        encoded_kps = torch.cat(encoded_kps, -1)           
+        num_points = int(kps.shape[-1] / 2)
+        encoded_kps = [
+            (kps[..., [2 * i, 2 * i + 1]] - priors[..., :2]) / priors[..., 2:]
+            for i in range(num_points)
+        ]
+        encoded_kps = torch.cat(encoded_kps, -1)
         return encoded_kps
 
     def _bboxes_nms(self, cls_scores, bboxes, score_factor, cfg):
@@ -411,7 +455,8 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
             with_stride=True)
 
         flatten_cls_preds = [
-            cls_pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, self.num_classes)
+            cls_pred.permute(0, 2, 3, 1).reshape(num_imgs, -1,
+                                                 self.num_classes)
             for cls_pred in cls_scores
         ]
         flatten_bbox_preds = [
@@ -432,16 +477,17 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         flatten_objectness = torch.cat(flatten_objectness, dim=1)
         flatten_kps_preds = torch.cat(flatten_kps_preds, dim=1)
 
-        flatten_priors = torch.cat(mlvl_priors).unsqueeze(0).repeat(num_imgs, 1, 1)
+        flatten_priors = torch.cat(mlvl_priors).unsqueeze(0).repeat(
+            num_imgs, 1, 1)
         flatten_bboxes = self._bbox_decode(flatten_priors, flatten_bbox_preds)
 
-        (pos_masks, cls_targets, obj_targets, bbox_targets, kps_targets, kps_weights,
-         num_fg_imgs) = multi_apply(
-            self._get_target_single,
-            flatten_cls_preds.detach(),
-            flatten_objectness.detach(),
-            flatten_priors,
-            flatten_bboxes.detach(), gt_bboxes, gt_labels, gt_kpss)
+        (pos_masks, cls_targets, obj_targets, bbox_targets, kps_targets,
+         kps_weights, num_fg_imgs) = multi_apply(self._get_target_single,
+                                                 flatten_cls_preds.detach(),
+                                                 flatten_objectness.detach(),
+                                                 flatten_priors,
+                                                 flatten_bboxes.detach(),
+                                                 gt_bboxes, gt_labels, gt_kpss)
 
         # The experimental results show that ‘reduce_mean’ can improve
         # performance on the COCO dataset.
@@ -460,27 +506,31 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
 
         loss_bbox = self.loss_bbox(
             flatten_bboxes.view(-1, 4)[pos_masks],
-                                    bbox_targets) / num_total_samples
+            bbox_targets) / num_total_samples
         loss_obj = self.loss_obj(flatten_objectness.view(-1, 1),
-                                    obj_targets) / num_total_samples
-        # loss_obj = self.loss_obj(flatten_objectness.view(-1, 1)[pos_masks], obj_targets) / num_total_samples
+                                 obj_targets) / num_total_samples
         loss_cls = self.loss_cls(
             flatten_cls_preds.view(-1, self.num_classes)[pos_masks],
-                                    cls_targets) / num_total_samples
+            cls_targets) / num_total_samples
         # use focalloss
         # loss_cls = self.loss_cls(
         #     flatten_cls_preds.view(-1, self.num_classes),
         #                             cls_targets)
         if self.use_kps:
-            encoded_kpss = self._kps_encode(flatten_priors.view(-1, 4)[pos_masks], kps_targets)
-                
-            loss_kps = self.loss_kps(flatten_kps_preds.view(-1, self.NK * 2)[pos_masks], 
-                                    encoded_kpss,
-                                    weight=kps_weights.view(-1, 1),
-                                    # reduction_override='sum',
-                                    avg_factor=torch.sum(kps_weights))
+            encoded_kpss = self._kps_encode(
+                flatten_priors.view(-1, 4)[pos_masks], kps_targets)
+
+            loss_kps = self.loss_kps(
+                flatten_kps_preds.view(-1, self.NK * 2)[pos_masks],
+                encoded_kpss,
+                weight=kps_weights.view(-1, 1),
+                # reduction_override='sum',
+                avg_factor=torch.sum(kps_weights))
         loss_dict = dict(
-            loss_cls=loss_cls, loss_bbox=loss_bbox, loss_obj=loss_obj, loss_kps = loss_kps)
+            loss_cls=loss_cls,
+            loss_bbox=loss_bbox,
+            loss_obj=loss_obj,
+            loss_kps=loss_kps)
 
         return loss_dict
 
@@ -538,19 +588,18 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
         cls_target = F.one_hot(sampling_result.pos_gt_labels,
                                self.num_classes) * pos_ious.unsqueeze(-1)
 
-        # cls_target = F.one_hot(sampling_result.pos_gt_labels, self.num_classes)
-
         obj_target = torch.zeros_like(objectness).unsqueeze(-1)
         obj_target[pos_inds] = 1
         # obj_target = pos_ious.unsqueeze(-1)
 
         bbox_target = sampling_result.pos_gt_bboxes
 
-        kps_target = gt_kpss[pos_assigned_gt_inds, :, :2].reshape( (-1, self.NK * 2) )
-        kps_weight = torch.mean(gt_kpss[pos_assigned_gt_inds, :, 2], dim=1, keepdims=True)
+        kps_target = gt_kpss[pos_assigned_gt_inds, :, :2].reshape(
+            (-1, self.NK * 2))
+        kps_weight = torch.mean(
+            gt_kpss[pos_assigned_gt_inds, :, 2], dim=1, keepdims=True)
 
         foreground_mask = torch.zeros_like(objectness).to(torch.bool)
         foreground_mask[pos_inds] = 1
         return (foreground_mask, cls_target, obj_target, bbox_target,
                 kps_target, kps_weight, num_pos_per_img)
-

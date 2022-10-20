@@ -211,8 +211,8 @@ class LoadAnnotations(object):
              Default: True.
         with_label (bool): Whether to parse and load the label annotation.
             Default: True.
-        with_keypoints (bool): Whether to parse and load the keypoints annotation.
-            Default: False.
+        with_keypoints (bool): Whether to parse and load the keypoints
+            annotation. Default: False.
         with_mask (bool): Whether to parse and load the mask annotation.
              Default: False.
         with_seg (bool): Whether to parse and load the semantic segmentation
@@ -359,7 +359,7 @@ class LoadAnnotations(object):
         results['gt_masks'] = gt_masks
         results['mask_fields'].append('gt_masks')
         return results
-        
+
     def _load_keypoints(self, results):
         """Private function to load bounding box annotations.
 

@@ -12,7 +12,8 @@ from .samplers import (BaseSampler, CombinedSampler,
 from .transforms import (bbox2distance, bbox2result, bbox2roi,
                          bbox_cxcywh_to_xyxy, bbox_flip, bbox_mapping,
                          bbox_mapping_back, bbox_rescale, bbox_xyxy_to_cxcywh,
-                         distance2bbox, find_inside_bboxes, roi2bbox, distance2kps, kps2distance)
+                         distance2bbox, distance2kps, find_inside_bboxes,
+                         kps2distance, roi2bbox)
 
 __all__ = [
     'bbox_overlaps', 'BboxOverlaps2D', 'BaseAssigner', 'MaxIoUAssigner',
@@ -24,6 +25,6 @@ __all__ = [
     'build_bbox_coder', 'BaseBBoxCoder', 'PseudoBBoxCoder',
     'DeltaXYWHBBoxCoder', 'TBLRBBoxCoder', 'DistancePointBBoxCoder',
     'CenterRegionAssigner', 'bbox_rescale', 'bbox_cxcywh_to_xyxy',
-    'bbox_xyxy_to_cxcywh', 'RegionAssigner', 'find_inside_bboxes', 
+    'bbox_xyxy_to_cxcywh', 'RegionAssigner', 'find_inside_bboxes',
     'distance2kps', 'kps2distance'
 ]

@@ -31,6 +31,7 @@ from .retina_head import RetinaHead
 from .retina_sepbn_head import RetinaSepBNHead
 from .rpn_head import RPNHead
 from .sabl_retina_head import SABLRetinaHead
+from .scrfd_head import SCRFDHead
 from .solo_head import DecoupledSOLOHead, DecoupledSOLOLightHead, SOLOHead
 from .ssd_head import SSDHead
 from .tood_head import TOODHead
@@ -39,11 +40,11 @@ from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
 from .yolo_head import YOLOV3Head
 from .yolof_head import YOLOFHead
 from .yolox_head import YOLOXHead
+from .yunet_head import YuNet_Head
 from .yunet_head_gfl import WWHead_GFL
 from .yunet_head_ota import WWHead_OTA
-from .scrfd_head import SCRFDHead
 from .yunet_head_yolox import YuNet_YOLOXHead
-from .yunet_head import YuNet_Head
+
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
     'RPNHead', 'GARPNHead', 'RetinaHead', 'RetinaSepBNHead', 'GARetinaHead',
@@ -56,5 +57,6 @@ __all__ = [
     'AutoAssignHead', 'DETRHead', 'YOLOFHead', 'DeformableDETRHead',
     'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 'LADHead', 'TOODHead', 'MaskFormerHead',
-    'Mask2FormerHead', 'WWHead_GFL', 'WWHead_OTA', 'SCRFDHead', 'YuNet_YOLOXHead', 'YuNet_Head'
+    'Mask2FormerHead', 'WWHead_GFL', 'WWHead_OTA', 'SCRFDHead',
+    'YuNet_YOLOXHead', 'YuNet_Head'
 ]

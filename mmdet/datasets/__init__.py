@@ -9,14 +9,13 @@ from .dataset_wrappers import (ClassBalancedDataset, ConcatDataset,
 from .deepfashion import DeepFashionDataset
 from .lvis import LVISDataset, LVISV1Dataset, LVISV05Dataset
 from .openimages import OpenImagesChallengeDataset, OpenImagesDataset
+from .retinaface import RetinaFaceDataset
 from .samplers import DistributedGroupSampler, DistributedSampler, GroupSampler
 from .utils import (NumClassCheckHook, get_loading_pipeline,
                     replace_ImageToTensor)
 from .voc import VOCDataset
 from .wider_face import WIDERFaceDataset
 from .xml_style import XMLDataset
-
-from .retinaface import RetinaFaceDataset
 
 __all__ = [
     'CustomDataset', 'XMLDataset', 'CocoDataset', 'DeepFashionDataset',

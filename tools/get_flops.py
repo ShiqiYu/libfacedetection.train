@@ -79,7 +79,8 @@ def main():
             'FLOPs counter is currently not currently supported with {}'.
             format(model.__class__.__name__))
 
-    flops, params = get_model_complexity_info(model, input_shape, as_strings=False)
+    flops, params = get_model_complexity_info(
+        model, input_shape, as_strings=False)
     split_line = '=' * 30
 
     if divisor > 0 and \

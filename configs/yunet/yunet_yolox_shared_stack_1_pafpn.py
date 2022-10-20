@@ -1,4 +1,3 @@
-
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optimizer_config = dict(grad_clip=None)
 lr_config = dict(
@@ -12,7 +11,10 @@ lr_config = dict(
 runner = dict(type='EpochBasedRunner', max_epochs=1000)
 
 checkpoint_config = dict(interval=100)
-log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=50,
+    hooks=[dict(type='TextLoggerHook'),
+           dict(type='TensorboardLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
@@ -157,7 +159,8 @@ model = dict(
     type='YuNet',
     backbone=dict(
         type='YuNetBackbone',
-        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64], [64, 64]],
+        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64],
+                        [64, 64]],
         downsample_idx=[0, 2, 3, 4],
         out_idx=[2, 3, 4, 5]),
     # neck=dict(
@@ -170,7 +173,7 @@ model = dict(
         out_channels=16,
         start_level=1,
         add_extra_convs='on_output',
-        num_outs=3),   
+        num_outs=3),
     bbox_head=dict(
         type='YuNet_YOLOXHead',
         num_classes=1,
@@ -179,11 +182,9 @@ model = dict(
         stacked_convs=0,
         feat_channels=64,
         # norm_cfg=dict(type='BN', requires_grad=True),
-        #norm_cfg=dict(type='GN', num_groups=16, requires_grad=True),
+        # norm_cfg=dict(type='GN', num_groups=16, requires_grad=True),
         prior_generator=dict(
-            type='MlvlPointGenerator',
-            offset=0,
-            strides=[8, 16, 32]),
+            type='MlvlPointGenerator', offset=0, strides=[8, 16, 32]),
         # loss_cls=dict(
         #     type='QualityFocalLoss',
         #     use_sigmoid=True,
@@ -193,21 +194,21 @@ model = dict(
         use_kps=True,
         kps_num=5,
         loss_kps=dict(
-            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1)
-    ),
-    train_cfg=dict(
-        assigner=dict(type='SimOTAAssigner', center_radius=2.5)),
+            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1)),
+    train_cfg=dict(assigner=dict(type='SimOTAAssigner', center_radius=2.5)),
     test_cfg=dict(
         nms_pre=-1,
         min_bbox_size=0,
         score_thr=0.02,
         nms=dict(type='nms', iou_threshold=0.45),
         max_per_img=-1,
-    
     ))
 evaluation = dict(interval=1001, metric='mAP')
 custom_hooks = [
-    dict(type='YuNetSampleSizeStatisticsHook', save_interval=50, out_file='./work_dirs/sample_statistics.json')
+    dict(
+        type='YuNetSampleSizeStatisticsHook',
+        save_interval=50,
+        out_file='./work_dirs/sample_statistics.json')
 ]
 
 find_unused_parameters = True

@@ -1,5 +1,3 @@
-
-
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optimizer_config = dict(grad_clip=None)
 lr_config = dict(
@@ -13,7 +11,12 @@ lr_config = dict(
 runner = dict(type='EpochBasedRunner', max_epochs=1000)
 
 checkpoint_config = dict(interval=50)
-log_config = dict(interval=50, hooks=[dict(type='YuNetTextLoggerHook'), dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=50,
+    hooks=[
+        dict(type='YuNetTextLoggerHook'),
+        dict(type='TensorboardLoggerHook')
+    ])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
@@ -31,7 +34,10 @@ img_norm_cfg = dict(
 #     dict(
 #         type='RandomSquareCrop',
 #         crop_choice=[0.3, 0.45, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]),
-#     dict(type='Resize', img_scale=(320, 640), keep_ratio=False, multiscale_mode='square_range'),
+#     dict(type='Resize',
+#         img_scale=(320, 640),
+#         keep_ratio=False,
+#         multiscale_mode='square_range'),
 #     dict(type='RandomFlip', flip_ratio=0.5),
 #     dict(
 #         type='PhotoMetricDistortion',
@@ -86,7 +92,11 @@ data = dict(
                 crop_choice=[
                     0.3, 0.45, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0
                 ]),
-            dict(type='Resize', img_scale=(320, 640), keep_ratio=False, multiscale_mode='square_range'),
+            dict(
+                type='Resize',
+                img_scale=(320, 640),
+                keep_ratio=False,
+                multiscale_mode='square_range'),
             dict(type='RandomFlip', flip_ratio=0.5),
             dict(
                 type='PhotoMetricDistortion',
@@ -157,13 +167,13 @@ model = dict(
     type='YuNet',
     backbone=dict(
         type='YuNetBackbone',
-        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64], [64, 64], [64, 64]],
+        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64],
+                        [64, 64], [64, 64]],
         downsample_idx=[0, 2, 3, 4, 5],
         out_idx=[3, 4, 5, 6]),
     neck=dict(
-        type='WWHead_TFPN',
-        in_channels=[64, 64, 64, 64],
-        out_idx=[0, 1, 2, 3]),
+        type='WWHead_TFPN', in_channels=[64, 64, 64, 64], out_idx=[0, 1, 2,
+                                                                   3]),
     bbox_head=dict(
         type='WWHead_OTA',
         num_classes=1,
@@ -180,22 +190,18 @@ model = dict(
         use_kps=True,
         kps_num=5,
         loss_kps=dict(
-            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1
-        )),
+            type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=0.1)),
     train_cfg=dict(
         assigner=dict(type='SimOTAAssigner', candidate_topk=10),
         allowed_border=-1,
         pos_weight=-1,
-        debug=False
-    ),
+        debug=False),
     test_cfg=dict(
         nms_pre=-1,
         min_bbox_size=0,
         score_thr=0.3,
         nms=dict(type='nms', iou_threshold=0.45),
-        max_per_img=-1
-    )    
-)
+        max_per_img=-1))
 epoch_multi = 1
 evaluation = dict(interval=1100, metric='mAP')
 # custom_hooks = [

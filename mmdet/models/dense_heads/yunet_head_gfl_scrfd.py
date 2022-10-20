@@ -1,24 +1,16 @@
-import numpy as np
+import math
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from mmcv.cnn import ConvModule, Scale, bias_init_with_prob, normal_init, DepthwiseSeparableConvModule
-from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import force_fp32
 
-from mmdet.core import (anchor_inside_flags, bbox2distance, bbox_overlaps,
-                        build_assigner, build_sampler, build_prior_generator,
-                        distance2bbox, distance2kps, kps2distance,
-                        images_to_levels, multi_apply, multiclass_nms,
-                        reduce_mean, unmap)
-
-                
+from mmdet.core import (anchor_inside_flags, bbox_overlaps, build_assigner,
+                        build_prior_generator, build_sampler, distance2bbox,
+                        images_to_levels, kps2distance, multi_apply,
+                        multiclass_nms, reduce_mean, unmap)
 from ..builder import HEADS, build_loss
 from ..utils.yunet_layer import ConvDPUnit
-from .anchor_head import AnchorHead
 
-import os
-import math
 
 @HEADS.register_module()
 class WWHead_GFL_SCRFD(nn.Module):
@@ -54,18 +46,18 @@ class WWHead_GFL_SCRFD(nn.Module):
     """
 
     def __init__(self,
-                num_classes,
-                in_channels,   
-                stacked_convs_num,
-                feat_channels,
-                use_kps=False,
-                kps_num=5,
-                loss_kps=None,
-                loss_cls=None,
-                loss_bbox=None,
-                anchor_generator=None,
-                train_cfg=None,
-                test_cfg=None):
+                 num_classes,
+                 in_channels,
+                 stacked_convs_num,
+                 feat_channels,
+                 use_kps=False,
+                 kps_num=5,
+                 loss_kps=None,
+                 loss_cls=None,
+                 loss_bbox=None,
+                 anchor_generator=None,
+                 train_cfg=None,
+                 test_cfg=None):
         super(WWHead_GFL_SCRFD, self).__init__()
         self.stacked_convs_num = stacked_convs_num
         self.extra_flops = 0.0
@@ -102,12 +94,15 @@ class WWHead_GFL_SCRFD(nn.Module):
             if self.stacked_convs_num > 0:
                 stack_conv = [ConvDPUnit(self.in_channels, self.feat_channels)]
                 for _ in range(self.stacked_convs_num - 1):
-                    stack_conv.append(ConvDPUnit(self.feat_channels, self.feat_channels))    
+                    stack_conv.append(
+                        ConvDPUnit(self.feat_channels, self.feat_channels))
                 self.stacked_convs.append(nn.Sequential(*stack_conv))
-            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.num_classes, False))
+            self.cls_convs.append(
+                ConvDPUnit(self.feat_channels, self.num_classes, False))
             self.bbox_convs.append(ConvDPUnit(self.feat_channels, 4, False))
             if self.use_kps:
-                self.kps_convs.append(ConvDPUnit(self.feat_channels, self.NK * 2, False))
+                self.kps_convs.append(
+                    ConvDPUnit(self.feat_channels, self.NK * 2, False))
         self.init_weights()
 
     def init_weights(self):
@@ -122,7 +117,7 @@ class WWHead_GFL_SCRFD(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
         bias_cls = -4.595
-        for m in self.cls_convs.modules():   
+        for m in self.cls_convs.modules():
             if isinstance(m, nn.Conv2d):
                 if m.bias is not None:
                     m.bias.data.fill_(bias_cls)
@@ -154,18 +149,22 @@ class WWHead_GFL_SCRFD(nn.Module):
             cls_pred = self.cls_convs[i](x)
             bbox_pred = self.bbox_convs[i](x)
 
-            cls_preds_list.append(cls_pred.flatten(start_dim=2).permute(0, 2, 1))
-            bbox_preds_list.append(bbox_pred.flatten(start_dim=2).permute(0, 2, 1))
+            cls_preds_list.append(
+                cls_pred.flatten(start_dim=2).permute(0, 2, 1))
+            bbox_preds_list.append(
+                bbox_pred.flatten(start_dim=2).permute(0, 2, 1))
             if self.use_kps:
                 kps_pred = self.kps_convs[i](x)
             else:
-                kps_pred = bbox_pred.new_zeros(\
-                    (bbox_pred.shape[0], self.NK*2, bbox_pred.shape[1], bbox_pred.shape[1]))
-            kps_preds_list.append(kps_pred.flatten(start_dim=2).permute(0, 2, 1))
+                kps_pred = bbox_pred.new_zeros(
+                    (bbox_pred.shape[0], self.NK * 2, bbox_pred.shape[1],
+                     bbox_pred.shape[1]))
+            kps_preds_list.append(
+                kps_pred.flatten(start_dim=2).permute(0, 2, 1))
 
         if torch.onnx.is_in_onnx_export():
             pass
-        
+
         return cls_preds_list, bbox_preds_list, kps_preds_list
 
     def forward_train(self,
@@ -200,8 +199,9 @@ class WWHead_GFL_SCRFD(nn.Module):
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
-            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss, img_metas)
-        
+            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss,
+                                  img_metas)
+
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if proposal_cfg is None:
             return losses
@@ -209,10 +209,9 @@ class WWHead_GFL_SCRFD(nn.Module):
             proposal_list = self.get_bboxes(*outs, img_metas, cfg=proposal_cfg)
             return losses, proposal_list
 
-
-
-    def loss_single(self, anchors, cls_score, bbox_pred, kps_pred, labels, label_weights,
-                    bbox_targets, kps_targets, kps_weights, stride, num_total_samples):
+    def loss_single(self, anchors, cls_score, bbox_pred, kps_pred, labels,
+                    label_weights, bbox_targets, kps_targets, kps_weights,
+                    stride, num_total_samples):
         """Compute loss of a single scale level.
 
         Args:
@@ -248,15 +247,16 @@ class WWHead_GFL_SCRFD(nn.Module):
         label_weights = label_weights.reshape(-1)
 
         if self.use_kps:
-            kps_targets = kps_targets.reshape( (-1, self.NK*2) )
-            kps_weights = kps_weights.reshape( (-1, self.NK*2) )
-            kps_pred = kps_pred.reshape(-1, self.NK*2)
+            kps_targets = kps_targets.reshape((-1, self.NK * 2))
+            kps_weights = kps_weights.reshape((-1, self.NK * 2))
+            kps_pred = kps_pred.reshape(-1, self.NK * 2)
 
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
         # pos_inds = ((labels >= 0)
         #             & (labels < bg_class_ind)).nonzero().squeeze(1)
-        pos_inds = torch.nonzero((labels >= 0) & (labels < bg_class_ind)).squeeze(1)
+        pos_inds = torch.nonzero((labels >= 0)
+                                 & (labels < bg_class_ind)).squeeze(1)
         score = label_weights.new_zeros(labels.shape)
 
         if len(pos_inds) > 0:
@@ -269,13 +269,15 @@ class WWHead_GFL_SCRFD(nn.Module):
             weight_targets = weight_targets.max(dim=1)[0][pos_inds]
             pos_decode_bbox_targets = pos_bbox_targets / stride[0]
             pos_decode_bbox_pred = distance2bbox(pos_anchor_centers,
-                                                     pos_bbox_pred)
+                                                 pos_bbox_pred)
             if self.use_kps:
                 pos_kps_targets = kps_targets[pos_inds]
                 pos_kps_pred = kps_pred[pos_inds]
-                pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds] * weight_targets
-                pos_kps_weights = pos_kps_weights.reshape( (-1, 1) )
-                pos_decode_kps_targets = kps2distance(pos_anchor_centers, pos_kps_targets / stride[0])
+                pos_kps_weights = kps_weights.max(
+                    dim=1)[0][pos_inds] * weight_targets
+                pos_kps_weights = pos_kps_weights.reshape((-1, 1))
+                pos_decode_kps_targets = kps2distance(
+                    pos_anchor_centers, pos_kps_targets / stride[0])
                 pos_decode_kps_pred = pos_kps_pred
 
             if use_qscore:
@@ -312,7 +314,6 @@ class WWHead_GFL_SCRFD(nn.Module):
             weight=label_weights,
             avg_factor=num_total_samples)
 
-
         return loss_cls, loss_bbox, loss_kps, weight_targets.sum()
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
@@ -328,10 +329,10 @@ class WWHead_GFL_SCRFD(nn.Module):
         """Compute losses of the head.
 
         Args:
-            cls_preds (list[Tensor]): Cls and quality scores for each image with
-                shape (Batch, N, num_class) (e.g. num_class=1 in face detection).
-                N = \sum(H_i x W_i), where H_i, W_i is resolution of each scale of
-                feature map.
+            cls_preds (list[Tensor]): Cls and quality scores for each image
+                with shape (Batch, N, num_class) (e.g. num_class=1 in face
+                detection). N = sum(H_i x W_i), where H_i, W_i is
+                resolution of each scale of feature map.
             bbox_preds (list[Tensor]): Box regression for each image with
                 shape [Batch, N, 4] in [l_offset, t_offset, r_offset, b_offset]
                 format.
@@ -351,12 +352,11 @@ class WWHead_GFL_SCRFD(nn.Module):
         # assert len(featmap_sizes) == self.anchor_generator.num_levels
 
         device = cls_preds[0].device
-        batch_size = cls_preds[0].shape[0]
+        # batch_size = cls_preds[0].shape[0]
         input_height, input_width = img_metas[0]['batch_input_shape']
-        featmap_sizes = [
-            (math.floor(input_height / stride[0]), math.floor(input_width / stride[0]))
-            for stride in self.prior_generator.strides
-        ]
+        featmap_sizes = [(math.floor(input_height / stride[0]),
+                          math.floor(input_width / stride[0]))
+                         for stride in self.prior_generator.strides]
         anchor_list, valid_flag_list = self.get_anchors(
             featmap_sizes, img_metas, device=device)
 
@@ -371,14 +371,14 @@ class WWHead_GFL_SCRFD(nn.Module):
             label_channels=self.num_classes)
         if cls_reg_targets is None:
             return None
-            
+
         (anchor_list, labels_list, label_weights_list, bbox_targets_list,
-         bbox_weights_list, keypoints_targets_list, keypoints_weights_list, 
+         bbox_weights_list, keypoints_targets_list, keypoints_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
 
         num_total_samples = reduce_mean(
             torch.tensor(num_total_pos, dtype=torch.float,
-                         device=device)).item()                         
+                         device=device)).item()
         num_total_samples = max(num_total_samples, 1.0)
 
         losses_cls, losses_bbox, losses_kps,\
@@ -394,7 +394,7 @@ class WWHead_GFL_SCRFD(nn.Module):
                 keypoints_targets_list,
                 keypoints_weights_list,
                 self.prior_generator.strides,
-                num_total_samples=num_total_samples)     
+                num_total_samples=num_total_samples)
 
         avg_factor = sum(avg_factor)
         avg_factor = reduce_mean(avg_factor).item()
@@ -407,13 +407,13 @@ class WWHead_GFL_SCRFD(nn.Module):
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'kps_preds'))
     def get_bboxes(self,
-                cls_preds,
-                bbox_preds,
-                kps_preds,
-                img_metas,
-                cfg=None,
-                rescale=False,
-                with_nms=True):
+                   cls_preds,
+                   bbox_preds,
+                   kps_preds,
+                   img_metas,
+                   cfg=None,
+                   rescale=False,
+                   with_nms=True):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -469,10 +469,9 @@ class WWHead_GFL_SCRFD(nn.Module):
 
         device = cls_preds[0].device
         input_height, input_width = img_metas[0]['batch_input_shape']
-        featmap_sizes = [
-            (math.floor(input_height / stride[0]), math.floor(input_width / stride[0]))
-            for stride in self.prior_generator.strides
-        ]
+        featmap_sizes = [(math.floor(input_height / stride[0]),
+                          math.floor(input_width / stride[0]))
+                         for stride in self.prior_generator.strides]
         mlvl_anchors = self.prior_generator.grid_priors(
             featmap_sizes, device=device)
 
@@ -625,7 +624,7 @@ class WWHead_GFL_SCRFD(nn.Module):
             gt_keypointss_list = [None for _ in range(num_imgs)]
 
         (all_anchors, all_labels, all_label_weights, all_bbox_targets,
-         all_bbox_weights, all_keypoints_targets, all_keypoints_weights, 
+         all_bbox_weights, all_keypoints_targets, all_keypoints_weights,
          pos_inds_list, neg_inds_list) = multi_apply(
              self._get_target_single,
              anchor_list,
@@ -654,13 +653,12 @@ class WWHead_GFL_SCRFD(nn.Module):
         bbox_weights_list = images_to_levels(all_bbox_weights,
                                              num_level_anchors)
         keypoints_targets_list = images_to_levels(all_keypoints_targets,
-                                             num_level_anchors)
+                                                  num_level_anchors)
         keypoints_weights_list = images_to_levels(all_keypoints_weights,
-                                             num_level_anchors)
+                                                  num_level_anchors)
         return (anchors_list, labels_list, label_weights_list,
-                bbox_targets_list, bbox_weights_list, keypoints_targets_list, keypoints_weights_list,
-                num_total_pos,
-                num_total_neg)
+                bbox_targets_list, bbox_weights_list, keypoints_targets_list,
+                keypoints_weights_list, num_total_pos, num_total_neg)
 
     def _get_target_single(self,
                            flat_anchors,
@@ -705,7 +703,7 @@ class WWHead_GFL_SCRFD(nn.Module):
                     image with shape (N, 4).
                 bbox_weights (Tensor): BBox weights of all anchors in the
                     image with shape (N, 4).
-                pos_inds (Tensor): Indices of postive anchor with shape
+                pos_inds (Tensor): Indices of positive anchor with shape
                     (num_pos,).
                 neg_inds (Tensor): Indices of negative anchor with shape
                     (num_neg,).
@@ -721,9 +719,8 @@ class WWHead_GFL_SCRFD(nn.Module):
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
         assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
-                                                 gt_bboxes, gt_bboxes_ignore,
-                                                 gt_labels)
-
+                                             gt_bboxes, gt_bboxes_ignore,
+                                             gt_labels)
 
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes)
@@ -731,8 +728,8 @@ class WWHead_GFL_SCRFD(nn.Module):
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
-        kps_targets = anchors.new_zeros(size=(anchors.shape[0], self.NK*2))
-        kps_weights = anchors.new_zeros(size=(anchors.shape[0], self.NK*2))
+        kps_targets = anchors.new_zeros(size=(anchors.shape[0], self.NK * 2))
+        kps_weights = anchors.new_zeros(size=(anchors.shape[0], self.NK * 2))
         labels = anchors.new_full((num_valid_anchors, ),
                                   self.num_classes,
                                   dtype=torch.long)
@@ -746,8 +743,12 @@ class WWHead_GFL_SCRFD(nn.Module):
             bbox_weights[pos_inds, :] = 1.0
             if self.use_kps:
                 pos_assigned_gt_inds = sampling_result.pos_assigned_gt_inds
-                kps_targets[pos_inds, :] = gt_keypointss[pos_assigned_gt_inds,:,:2].reshape( (-1, self.NK*2) )
-                kps_weights[pos_inds, :] = torch.mean(gt_keypointss[pos_assigned_gt_inds,:,2], dim=1, keepdims=True)
+                kps_targets[pos_inds, :] = gt_keypointss[
+                    pos_assigned_gt_inds, :, :2].reshape((-1, self.NK * 2))
+                kps_weights[pos_inds, :] = torch.mean(
+                    gt_keypointss[pos_assigned_gt_inds, :, 2],
+                    dim=1,
+                    keepdims=True)
             if gt_labels is None:
                 # Only rpn gives gt_labels as None
                 # Foreground is the first class
@@ -773,12 +774,13 @@ class WWHead_GFL_SCRFD(nn.Module):
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
             if self.use_kps:
-                kps_targets = unmap(kps_targets, num_total_anchors, inside_flags)
-                kps_weights = unmap(kps_weights, num_total_anchors, inside_flags)
+                kps_targets = unmap(kps_targets, num_total_anchors,
+                                    inside_flags)
+                kps_weights = unmap(kps_weights, num_total_anchors,
+                                    inside_flags)
 
         return (anchors, labels, label_weights, bbox_targets, bbox_weights,
-                kps_targets, kps_weights,
-                pos_inds, neg_inds)
+                kps_targets, kps_weights, pos_inds, neg_inds)
 
     def get_num_level_anchors_inside(self, num_level_anchors, inside_flags):
         split_inside_flags = torch.split(inside_flags, num_level_anchors)
@@ -835,7 +837,6 @@ class WWHead_GFL_SCRFD(nn.Module):
 
         return anchor_list, valid_flag_list
 
-
     def anchor_center(self, anchors):
         """Get anchor centers from anchors.
 
@@ -848,5 +849,3 @@ class WWHead_GFL_SCRFD(nn.Module):
         anchors_cx = (anchors[:, 2] + anchors[:, 0]) / 2
         anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
         return torch.stack([anchors_cx, anchors_cy], dim=-1)
-
-

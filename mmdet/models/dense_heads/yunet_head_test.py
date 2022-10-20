@@ -1,23 +1,14 @@
-from unittest import result
-import numpy as np
+import math
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from mmcv.cnn import ConvModule, Scale, bias_init_with_prob, normal_init, DepthwiseSeparableConvModule
-from mmcv.cnn import constant_init, kaiming_init
 from mmcv.runner import force_fp32
 
-from mmdet.core import (anchor_inside_flags, bbox2distance, bbox_overlaps,
-                        build_assigner, build_sampler, distance2bbox, distance2kps, kps2distance,
-                        images_to_levels, multi_apply, multiclass_nms,
-                        reduce_mean, unmap)
-
-                
+from mmdet.core import (build_assigner, build_sampler, distance2bbox,
+                        kps2distance, multi_apply, multiclass_nms, reduce_mean)
 from ..builder import HEADS, build_loss
 from ..utils.yunet_layer import ConvDPUnit
 
-import os
-import math
 
 @HEADS.register_module()
 class WWHead(nn.Module):
@@ -53,18 +44,18 @@ class WWHead(nn.Module):
     """
 
     def __init__(self,
-                num_classes,
-                in_channels,   
-                stacked_convs_num,
-                feat_channels,
-                strides,
-                use_kps=False,
-                kps_num=5,
-                loss_kps=None,
-                loss_cls=None,
-                loss_bbox=None,
-                train_cfg=None,
-                test_cfg=None):
+                 num_classes,
+                 in_channels,
+                 stacked_convs_num,
+                 feat_channels,
+                 strides,
+                 use_kps=False,
+                 kps_num=5,
+                 loss_kps=None,
+                 loss_cls=None,
+                 loss_bbox=None,
+                 train_cfg=None,
+                 test_cfg=None):
         super(WWHead, self).__init__()
         self.stacked_convs_num = stacked_convs_num
         self.extra_flops = 0.0
@@ -87,12 +78,10 @@ class WWHead(nn.Module):
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
 
-
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.loss_kps = build_loss(loss_kps)
         self._init_layers()
-
 
         self.train_step = 0
         self.pos_count = {}
@@ -106,9 +95,11 @@ class WWHead(nn.Module):
         for i in range(self.strides_num):
             stack_conv = [ConvDPUnit(self.in_channels, self.feat_channels)]
             for _ in range(self.stacked_convs_num - 1):
-                stack_conv.append(ConvDPUnit(self.feat_channels, self.feat_channels))    
+                stack_conv.append(
+                    ConvDPUnit(self.feat_channels, self.feat_channels))
             self.stacked_convs.append(nn.Sequential(*stack_conv))
-            self.cls_convs.append(ConvDPUnit(self.feat_channels, self.out_channels, False))
+            self.cls_convs.append(
+                ConvDPUnit(self.feat_channels, self.out_channels, False))
         self.init_weights()
 
     def init_weights(self):
@@ -123,7 +114,7 @@ class WWHead(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
         bias_cls = -4.595
-        for m in self.cls_convs.modules():   
+        for m in self.cls_convs.modules():
             if isinstance(m, nn.Conv2d):
                 if m.bias is not None:
                     nn.init.xavier_normal_(m.weight.data)
@@ -155,11 +146,14 @@ class WWHead(nn.Module):
             x = self.stacked_convs[i](feats[i])
             x = self.cls_convs[i](x)
             outs.append(x)
-        head_data=torch.cat([x.flatten(start_dim=2) for x in outs], dim=-1).permute(0, 2, 1)
+        head_data = torch.cat([x.flatten(start_dim=2) for x in outs],
+                              dim=-1).permute(0, 2, 1)
         if self.use_kps:
-            output = head_data.split_with_sizes(split_sizes=(4, self.NK * 2, self.num_classes), dim=-1)
+            output = head_data.split_with_sizes(
+                split_sizes=(4, self.NK * 2, self.num_classes), dim=-1)
         else:
-            output = head_data.split_with_sizes(split_sizes=(4, self.num_classes), dim=-1)
+            output = head_data.split_with_sizes(
+                split_sizes=(4, self.num_classes), dim=-1)
         return output
 
     def forward_train(self,
@@ -194,7 +188,8 @@ class WWHead(nn.Module):
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
-            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss, img_metas)      
+            loss_inputs = outs + (gt_bboxes, gt_labels, gt_keypointss,
+                                  img_metas)
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if proposal_cfg is None:
             return losses
@@ -202,10 +197,10 @@ class WWHead(nn.Module):
             proposal_list = self.get_bboxes(*outs, img_metas, cfg=proposal_cfg)
             return losses, proposal_list
 
-    def get_single_level_center_priors(
-        self, batch_size, featmap_size, stride, dtype, device
-    ):
+    def get_single_level_center_priors(self, batch_size, featmap_size, stride,
+                                       dtype, device):
         """Generate centers of a single stage feature map.
+
         Args:
             batch_size (int): Number of images in one batch.
             featmap_size (tuple[int]): height and width of the feature map
@@ -221,16 +216,16 @@ class WWHead(nn.Module):
         y, x = torch.meshgrid(y_range, x_range)
         y = y.flatten()
         x = x.flatten()
-        strides = x.new_full((x.shape[0],), stride)
+        strides = x.new_full((x.shape[0], ), stride)
         proiors = torch.stack([x, y, strides, strides], dim=-1)
         return proiors.unsqueeze(0).repeat(batch_size, 1, 1)
 
     @torch.no_grad()
-    def target_assign_single_img(
-        self, cls_preds, bbox_decoded, kps_preds, center_priors, gt_bboxes, gt_kps, gt_labels
-    ):
+    def target_assign_single_img(self, cls_preds, bbox_decoded, kps_preds,
+                                 center_priors, gt_bboxes, gt_kps, gt_labels):
         """Compute classification, regression, and objectness targets for
         priors in a single image.
+
         Args:
             cls_preds (Tensor): Classification predictions of one image,
                 a 2D-Tensor with shape [num_priors, num_classes]
@@ -252,22 +247,21 @@ class WWHead(nn.Module):
         bbox_weights = torch.zeros_like(bbox_decoded)
         kps_targets = torch.zeros_like(kps_preds)
         kps_weights = torch.zeros_like(kps_preds)
-        labels = center_priors.new_full(
-            (num_priors,), self.num_classes, dtype=torch.long
-        )
+        labels = center_priors.new_full((num_priors, ),
+                                        self.num_classes,
+                                        dtype=torch.long)
         label_scores = center_priors.new_zeros(labels.shape, dtype=torch.float)
         # No target
         if num_gts == 0:
             return labels, label_scores, bbox_targets, kps_targets, 0
 
-        assign_result = self.assigner.assign(
-            cls_preds.sigmoid(), center_priors, bbox_decoded, gt_bboxes, gt_labels
-        )
-        sampling_result = self.sampler.sample(
-            assign_result, center_priors, gt_bboxes
-        )
+        assign_result = self.assigner.assign(cls_preds.sigmoid(),
+                                             center_priors, bbox_decoded,
+                                             gt_bboxes, gt_labels)
+        sampling_result = self.sampler.sample(assign_result, center_priors,
+                                              gt_bboxes)
         pos_inds = sampling_result.pos_inds
-        neg_inds = sampling_result.neg_inds
+        # neg_inds = sampling_result.neg_inds
         num_pos_per_img = pos_inds.size(0)
         pos_ious = assign_result.max_overlaps[pos_inds]
         if len(pos_inds) > 0:
@@ -277,8 +271,10 @@ class WWHead(nn.Module):
             labels[pos_inds] = gt_labels[pos_assigned_gt_inds]
             label_scores[pos_inds] = pos_ious
             if self.use_kps:
-                kps_targets[pos_inds, :] = gt_kps[pos_assigned_gt_inds,:,:2].reshape( (-1, self.NK*2) )
-                kps_weights[pos_inds, :] = torch.mean(gt_kps[pos_assigned_gt_inds, :, 2], dim=1, keepdims=True)
+                kps_targets[pos_inds, :] = gt_kps[
+                    pos_assigned_gt_inds, :, :2].reshape((-1, self.NK * 2))
+                kps_weights[pos_inds, :] = torch.mean(
+                    gt_kps[pos_assigned_gt_inds, :, 2], dim=1, keepdims=True)
         return (
             labels,
             label_scores,
@@ -288,6 +284,7 @@ class WWHead(nn.Module):
             kps_weights,
             num_pos_per_img,
         )
+
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
              bbox_preds,
@@ -301,13 +298,13 @@ class WWHead(nn.Module):
         """Compute losses of the head.
 
         Args:
-            cls_preds (list[Tensor]): Cls and quality scores for each image with
-                shape (Batch, N, num_class) (e.g. num_class=1 in face detection).
-                N = \sum(H_i x W_i), where H_i, W_i is resolution of each scale of
-                feature map.
+            cls_preds (list[Tensor]): Cls and quality scores for each image
+                with shape (Batch, N, num_class) (e.g. num_class=1 in face
+                detection). N = sum(H_i x W_i), where H_i, W_i is resolution
+                of each scale of feature map.
             bbox_preds (list[Tensor]): Box regression for each image with
-                shape [Batch, N, 4] in [l_offset, t_offset, r_offset, b_offset] / stride_i
-                format.
+                shape [Batch, N, 4] in [l_offset, t_offset, r_offset, b_offset]
+                / stride_i format.
             gt_bboxes (list[Tensor]): Ground truth bboxes for each image with
                 shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels (list[Tensor]): class indices corresponding to each box
@@ -326,10 +323,9 @@ class WWHead(nn.Module):
         device = cls_preds.device
         batch_size = cls_preds.shape[0]
         input_height, input_width = img_metas[0]['batch_input_shape']
-        featmap_sizes = [
-            (math.floor(input_height / stride), math.floor(input_width / stride))
-            for stride in self.strides
-        ]
+        featmap_sizes = [(math.floor(input_height / stride),
+                          math.floor(input_width / stride))
+                         for stride in self.strides]
 
         # get grid cells of batch image [batch, N, 4]
         mlvl_center_priors = [
@@ -339,11 +335,12 @@ class WWHead(nn.Module):
                 stride,
                 dtype=torch.float32,
                 device=device,
-            )
-            for i, stride in enumerate(self.strides)
+            ) for i, stride in enumerate(self.strides)
         ]
         center_priors = torch.cat(mlvl_center_priors, dim=1).detach()
-        bboxes_decoded = distance2bbox(center_priors[..., :2], bbox_preds.exp() * center_priors[..., 2, None])
+        bboxes_decoded = distance2bbox(
+            center_priors[..., :2],
+            bbox_preds.exp() * center_priors[..., 2, None])
         batch_assign_res = multi_apply(
             self.target_assign_single_img,
             cls_preds.detach(),
@@ -355,12 +352,13 @@ class WWHead(nn.Module):
             gt_labels,
         )
 
-
-
-        (labels, label_scores, bbox_targets, bbox_weights, kps_targets, kps_weights, num_pos_per_img) = batch_assign_res
+        (labels, label_scores, bbox_targets, bbox_weights, kps_targets,
+         kps_weights, num_pos_per_img) = batch_assign_res
         num_total_samples = max(
-            reduce_mean(torch.tensor(sum(num_pos_per_img), dtype=torch.float, device=device)).item(), 1.0
-        )
+            reduce_mean(
+                torch.tensor(
+                    sum(num_pos_per_img), dtype=torch.float,
+                    device=device)).item(), 1.0)
         labels = torch.cat(labels, dim=0)
         label_scores = torch.cat(label_scores, dim=0)
         bbox_targets = torch.cat(bbox_targets, dim=0)
@@ -369,16 +367,17 @@ class WWHead(nn.Module):
         bboxes_decoded = bboxes_decoded.reshape(-1, 4)
         center_priors = center_priors.reshape(-1, 4)
         loss_qfl = self.loss_cls(
-            cls_preds, (labels, label_scores), avg_factor=num_total_samples
-        )
+            cls_preds, (labels, label_scores), avg_factor=num_total_samples)
 
         pos_inds = torch.nonzero(
-            (labels >= 0) & (labels < self.num_classes), as_tuple=False
-        ).squeeze(1)
+            (labels >= 0) & (labels < self.num_classes),
+            as_tuple=False).squeeze(1)
 
         if len(pos_inds) > 0:
-            weight_targets = cls_preds[pos_inds].detach().sigmoid().max(dim=1)[0]
-            bbox_avg_factor = max(reduce_mean(weight_targets.sum()).item(), 1.0)
+            weight_targets = cls_preds[pos_inds].detach().sigmoid().max(
+                dim=1)[0]
+            bbox_avg_factor = max(
+                reduce_mean(weight_targets.sum()).item(), 1.0)
 
             loss_bbox = self.loss_bbox(
                 bboxes_decoded[pos_inds],
@@ -390,11 +389,12 @@ class WWHead(nn.Module):
                 kps_preds = kps_preds.reshape(-1, self.NK * 2)
                 kps_targets = torch.cat(kps_targets, dim=0)
                 kps_weights = torch.cat(kps_weights, dim=0)
-                pos_kps_weights = kps_weights.max(dim=1)[0][pos_inds] * weight_targets
+                pos_kps_weights = kps_weights.max(
+                    dim=1)[0][pos_inds] * weight_targets
                 pos_kps_targets = kps_targets[pos_inds]
-                pos_kps_targets_encoded = \
-                    kps2distance(center_priors[pos_inds, :2], pos_kps_targets) / \
-                        center_priors[pos_inds, 2, None]
+                pos_kps_targets_encoded = kps2distance(
+                    center_priors[pos_inds, :2],
+                    pos_kps_targets) / center_priors[pos_inds, 2, None]
                 loss_kps = self.loss_kps(
                     kps_preds[pos_inds],
                     pos_kps_targets_encoded,
@@ -476,10 +476,9 @@ class WWHead(nn.Module):
         device = cls_preds[0].device
         input_height, input_width = img_metas[0]['batch_input_shape']
         input_shape = (input_height, input_width)
-        featmap_sizes = [
-            (math.floor(input_height / stride), math.floor(input_width / stride))
-            for stride in self.strides
-        ]
+        featmap_sizes = [(math.floor(input_height / stride),
+                          math.floor(input_width / stride))
+                         for stride in self.strides]
 
         # get grid cells of batch image [batch, N, 4]
         mlvl_center_priors = [
@@ -489,14 +488,19 @@ class WWHead(nn.Module):
                 stride,
                 dtype=torch.float32,
                 device=device,
-            )
-            for i, stride in enumerate(self.strides)
+            ) for i, stride in enumerate(self.strides)
         ]
         center_priors = torch.cat(mlvl_center_priors, dim=1)
-        bboxes = distance2bbox(center_priors[..., :2], bbox_preds.exp() * center_priors[..., 2, None], max_shape=input_shape)
-        # scale_factor = torch.cat([bboxes.new_tensor(img_metas[b]['scale_factor']) for b in range(batch_size)], dim=0)
+        bboxes = distance2bbox(
+            center_priors[..., :2],
+            bbox_preds.exp() * center_priors[..., 2, None],
+            max_shape=input_shape)
+        # scale_factor = torch.cat(
+        #   [bboxes.new_tensor(img_metas[b]['scale_factor'])
+        #       for b in range(batch_size)], dim=0)
 
-        # kps = distance2kps(center_priors[..., :2], kps_preds * center_priors[..., 2, None])
+        # kps = distance2kps(center_priors[..., :2],
+        #   kps_preds * center_priors[..., 2, None])
         scores = cls_preds.sigmoid()
         result_list = []
         cfg = self.test_cfg if cfg is None else cfg
@@ -514,28 +518,5 @@ class WWHead(nn.Module):
                 max_num=cfg.max_per_img,
                 # return_inds=True
             )
-            # import cv2
-            # import os
-            # import numpy as np
-            # img = cv2.imread(os.path.join('/home/ww/projects/wwdet_mmd', img_metas[img_id]['filename']))
-            # bbox_res = results[0][:, :4].cpu().numpy() / img_metas[img_id]['scale_factor']
-            # score_res = results[0][:, -1].cpu().numpy()
-            # inds = results[2].cpu().numpy()
-            # kps_res = kps[img_id].cpu().numpy()[inds].reshape(-1, 2) / img_metas[img_id]['scale_factor'][:2]
-            # kps_res = kps_res.reshape(-1, 10).astype(np.int32)
-            # mask = score_res > 0.2
-            # bbox_res = bbox_res.astype(np.int32)
-            # bbox_res = bbox_res[mask]
-            # kps_res = kps_res[mask]
-            # for i in range(bbox_res.shape[0]):
-            #     b = bbox_res[i]
-            #     cv2.rectangle(img, pt1=(b[0], b[1]), pt2=(b[2], b[3]), color=(255, 0, 0))
-            #     k = kps_res[i]
-            #     for i in range(5):
-            #         cv2.circle(img, center=(k[2*i], k[2*i + 1]), radius=1, color=(0, 0, 255))
-                
-            # cv2.imwrite('/home/ww/projects/wwdet_mmd/work_dirs/sample/result.jpg', img)
-
-            # result_list.append((results[0], results[1]))
             result_list.append(results)
         return result_list

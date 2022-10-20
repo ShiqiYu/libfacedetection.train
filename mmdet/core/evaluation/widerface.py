@@ -6,21 +6,22 @@ copyright@wondervictor
 """
 
 from __future__ import absolute_import
-import os
-import tqdm
-import pickle
 import datetime
-import argparse
+import os
+import pickle
+
 import numpy as np
+import tqdm
 from scipy.io import loadmat
+
 
 def bbox_overlaps(boxes, query_boxes):
     n_ = boxes.shape[0]
     k_ = query_boxes.shape[0]
     overlaps = np.zeros((n_, k_), dtype=np.float)
     for k in range(k_):
-        query_box_area = (query_boxes[k, 2] - query_boxes[k, 0] +
-                          1) * (query_boxes[k, 3] - query_boxes[k, 1] + 1)
+        query_box_area = (query_boxes[k, 2] - query_boxes[k, 0] + 1) * (
+            query_boxes[k, 3] - query_boxes[k, 1] + 1)
         for n in range(n_):
             iw = min(boxes[n, 2], query_boxes[k, 2]) - max(
                 boxes[n, 0], query_boxes[k, 0]) + 1
@@ -28,41 +29,40 @@ def bbox_overlaps(boxes, query_boxes):
                 ih = min(boxes[n, 3], query_boxes[k, 3]) - max(
                     boxes[n, 1], query_boxes[k, 1]) + 1
                 if ih > 0:
-                    box_area = (boxes[n, 2] - boxes[n, 0] +
-                                1) * (boxes[n, 3] - boxes[n, 1] + 1)
+                    box_area = (boxes[n, 2] - boxes[n, 0] + 1) * (
+                        boxes[n, 3] - boxes[n, 1] + 1)
                     all_area = float(box_area + query_box_area - iw * ih)
                     overlaps[n, k] = iw * ih / all_area
     return overlaps
 
+
 def bbox_overlap(a, b):
-    x1 = np.maximum(a[:,0], b[0])
-    y1 = np.maximum(a[:,1], b[1])
-    x2 = np.minimum(a[:,2], b[2])
-    y2 = np.minimum(a[:,3], b[3])
-    w = x2-x1+1
-    h = y2-y1+1
-    inter = w*h
-    aarea = (a[:,2]-a[:,0]+1) * (a[:,3]-a[:,1]+1)
-    barea = (b[2]-b[0]+1) * (b[3]-b[1]+1)
-    o = inter / (aarea+barea-inter)
-    o[w<=0] = 0
-    o[h<=0] = 0
+    x1 = np.maximum(a[:, 0], b[0])
+    y1 = np.maximum(a[:, 1], b[1])
+    x2 = np.minimum(a[:, 2], b[2])
+    y2 = np.minimum(a[:, 3], b[3])
+    w = x2 - x1 + 1
+    h = y2 - y1 + 1
+    inter = w * h
+    aarea = (a[:, 2] - a[:, 0] + 1) * (a[:, 3] - a[:, 1] + 1)
+    barea = (b[2] - b[0] + 1) * (b[3] - b[1] + 1)
+    o = inter / (aarea + barea - inter)
+    o[w <= 0] = 0
+    o[h <= 0] = 0
     return o
 
+
 def np_around(array, num_decimals=0):
-    #return array
     return np.around(array, decimals=num_decimals)
 
 
 def np_round(val, decimals=4):
     return val
-    #if isinstance(val, np.ndarray):
-    #    val = np.around(val, decimals=decimals)
-    #return val
 
 
 def get_gt_boxes(gt_dir):
-    """ gt dir: (wider_face_val.mat, wider_easy_val.mat, wider_medium_val.mat, wider_hard_val.mat)"""
+    """gt dir: (wider_face_val.mat, wider_easy_val.mat, wider_medium_val.mat,
+    wider_hard_val.mat)"""
 
     gt_mat = loadmat(os.path.join(gt_dir, 'wider_face_val.mat'))
     hard_mat = loadmat(os.path.join(gt_dir, 'wider_hard_val.mat'))
@@ -77,7 +77,8 @@ def get_gt_boxes(gt_dir):
     medium_gt_list = medium_mat['gt_list']
     easy_gt_list = easy_mat['gt_list']
 
-    return facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list
+    return facebox_list, event_list, file_list, \
+        hard_gt_list, medium_gt_list, easy_gt_list
 
 
 def get_gt_boxes_from_txt(gt_path, cache_dir):
@@ -94,7 +95,6 @@ def get_gt_boxes_from_txt(gt_path, cache_dir):
     lines = f.readlines()
     lines = list(map(lambda x: x.rstrip('\r\n'), lines))
     boxes = {}
-    #print(len(lines))
     f.close()
     current_boxes = []
     current_name = None
@@ -132,7 +132,10 @@ def read_pred_file(filepath):
         img_file = lines[0].rstrip('\n\r')
         lines = lines[2:]
 
-    boxes = np.array(list(map(lambda x: [float(a) for a in x.rstrip('\r\n').split(' ')], lines))).astype('float')
+    boxes = np.array(
+        list(
+            map(lambda x: [float(a) for a in x.rstrip('\r\n').split(' ')],
+                lines))).astype('float')
     return img_file.split('/')[-1], boxes
 
 
@@ -154,11 +157,9 @@ def get_preds(pred_dir):
 
 
 def norm_score(pred):
-    """ norm score
-    pred {key: [[x1,y1,x2,y2,s]]}
-    """
+    """norm score pred {key: [[x1,y1,x2,y2,s]]}"""
 
-    max_score = -1 
+    max_score = -1
     min_score = 2
 
     for _, k in pred.items():
@@ -175,7 +176,7 @@ def norm_score(pred):
         for _, v in k.items():
             if len(v) == 0:
                 continue
-            v[:, -1] = (v[:, -1] - min_score).astype(np.float64)/diff
+            v[:, -1] = (v[:, -1] - min_score).astype(np.float64) / diff
     return pred
 
 
@@ -186,7 +187,6 @@ def image_eval(pred, gt, ignore, iou_thresh, mpp):
     ignore:
     """
 
-    
     _pred = pred.copy()
     _gt = gt.copy()
     pred_recall = np.zeros(_pred.shape[0])
@@ -198,41 +198,13 @@ def image_eval(pred, gt, ignore, iou_thresh, mpp):
     _gt[:, 2] = _gt[:, 2] + _gt[:, 0]
     _gt[:, 3] = _gt[:, 3] + _gt[:, 1]
 
-    gt_overlap_list = mpp.starmap(bbox_overlap, zip([_gt]*_pred.shape[0],[_pred[h] for h in range(_pred.shape[0])]))
-
-    #use_cuda = True
-    #if use_cuda:
-    #    _pred = torch.cuda.FloatTensor(_pred[:,:4])
-    #    _gt = torch.cuda.FloatTensor(_gt)
-    #else:
-    #    _pred = torch.FloatTensor(_pred[:,:4])
-    #    _gt = torch.FloatTensor(_gt)
-
-    #overlaps = jaccard(_pred, _gt).cpu().numpy()
-    #overlaps = compute_iou((_pred[:, :4]), (_gt))
-
-    #overlaps = bbox_overlaps(_pred, _gt)
-
-    #if use_cuda:
-    #    overlaps = overlaps.cpu().numpy()
-    #else:
-    #    overlaps = overlaps.numpy()
+    gt_overlap_list = mpp.starmap(
+        bbox_overlap,
+        zip([_gt] * _pred.shape[0], [_pred[h] for h in range(_pred.shape[0])]))
 
     for h in range(_pred.shape[0]):
 
-        #gt_overlap = overlaps[h]
-        #gt_overlap = bbox_overlap(_gt, _pred[h])
         gt_overlap = gt_overlap_list[h]
-        #if use_cuda:
-        #    gt_overlap = gt_overlap.cpu().numpy()
-        #else:
-        #    gt_overlap = gt_overlap.numpy()
-
-        #max_overlap, max_idx = gt_overlap.max(), gt_overlap.argmax()
-        #gt_overlap = compute_iou(_gt, _pred[h, :4])
-        #exit()
-        #exit()
-        #print ('overlap', gt_overlap)
         max_overlap, max_idx = gt_overlap.max(), gt_overlap.argmax()
 
         if max_overlap >= iou_thresh:
@@ -250,35 +222,30 @@ def image_eval(pred, gt, ignore, iou_thresh, mpp):
 
 def img_pr_info(thresh_num, pred_info, proposal_list, pred_recall):
     pr_info = np.zeros((thresh_num, 2)).astype('float')
-    fp = np.zeros((pred_info.shape[0],), dtype=np.int)
-    last_info = [-1, -1]
+    fp = np.zeros((pred_info.shape[0], ), dtype=np.int)
+    # last_info = [-1, -1]
     for t in range(thresh_num):
 
-        thresh = 1 - (t+1)/thresh_num
+        thresh = 1 - (t + 1) / thresh_num
         r_index = np.where(pred_info[:, 4] >= thresh)[0]
         if len(r_index) == 0:
             pr_info[t, 0] = 0
             pr_info[t, 1] = 0
         else:
             r_index = r_index[-1]
-            p_index = np.where(proposal_list[:r_index+1] == 1)[0]
-            pr_info[t, 0] = len(p_index) #valid pred number
-            pr_info[t, 1] = pred_recall[r_index] # valid gt number
+            p_index = np.where(proposal_list[:r_index + 1] == 1)[0]
+            pr_info[t, 0] = len(p_index)  # valid pred number
+            pr_info[t, 1] = pred_recall[r_index]  # valid gt number
 
-            if t>0 and pr_info[t, 0] > pr_info[t-1,0] and pr_info[t, 1]==pr_info[t-1,1]:
+            if t > 0 and pr_info[t, 0] > pr_info[t - 1, 0] and pr_info[
+                    t, 1] == pr_info[t - 1, 1]:
                 fp[r_index] = 1
-                #if thresh>=0.85:
-                #    print(thresh, t, pr_info[t])
-    #print(pr_info[:10,0])
-    #print(pr_info[:10,1])
     return pr_info, fp
 
 
 def dataset_pr_info(thresh_num, pr_curve, count_face):
     _pr_curve = np.zeros((thresh_num, 2))
     for i in range(thresh_num):
-        #_pr_curve[i, 0] = round(pr_curve[i, 1] / pr_curve[i, 0], 4)
-        #_pr_curve[i, 1] = round(pr_curve[i, 1] / count_face, 4)
         _pr_curve[i, 0] = pr_curve[i, 1] / pr_curve[i, 0]
         _pr_curve[i, 1] = pr_curve[i, 1] / count_face
     return _pr_curve
@@ -288,8 +255,6 @@ def voc_ap(rec, prec):
 
     # correct AP calculation
     # first append sentinel values at the end
-    #print ('rec:', rec)
-    #print ('pre:', prec)
     mrec = np.concatenate(([0.], rec, [1.]))
     mpre = np.concatenate(([0.], prec, [0.]))
 
@@ -307,38 +272,31 @@ def voc_ap(rec, prec):
 
 
 def wider_evaluation(pred, gt_path, iou_thresh=0.5):
-    #pred = get_preds(pred)
+    # pred = get_preds(pred)
     pred = norm_score(pred)
     thresh_num = 1000
-    #thresh_num = 2000
-    facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list = get_gt_boxes(gt_path)
+    # thresh_num = 2000
+    facebox_list, event_list, file_list, hard_gt_list, \
+        medium_gt_list, easy_gt_list = get_gt_boxes(gt_path)
     event_num = len(event_list)
     settings = ['easy', 'medium', 'hard']
     setting_gts = [easy_gt_list, medium_gt_list, hard_gt_list]
     from multiprocessing import Pool
-    #from multiprocessing.pool import ThreadPool
+
+    # from multiprocessing.pool import ThreadPool
     mpp = Pool(8)
     aps = [-1.0, -1.0, -1.0]
-    meta = {}
-    #setting_id = 2
     print('')
     for setting_id in range(3):
-    #for setting_id in range(1):
         ta = datetime.datetime.now()
-        # different setting
-        #iou_th = 0.5 #+ 0.05 * idx
         iou_th = iou_thresh
-        # different setting
         gt_list = setting_gts[setting_id]
         count_face = 0
         pr_curve = np.zeros((thresh_num, 2)).astype('float')
         # [hard, medium, easy]
-        #pbar = tqdm.tqdm(range(event_num))
-        #for i in pbar:
-        high_score_count = 0
-        high_score_fp_count = 0
+        # high_score_count = 0
+        # high_score_fp_count = 0
         for i in range(event_num):
-            #pbar.set_description('Processing {}'.format(settings[setting_id]))
             event_name = str(event_list[i][0][0])
             img_list = file_list[i][0]
             pred_list = pred[event_name]
@@ -352,84 +310,55 @@ def wider_evaluation(pred, gt_path, iou_thresh=0.5):
 
                 gt_boxes = gt_bbx_list[j][0].astype('float')
                 keep_index = sub_gt_list[j][0]
-                #print ('keep_index', keep_index)
                 count_face += len(keep_index)
-                
 
                 if len(gt_boxes) == 0 or len(pred_info) == 0:
                     continue
-                #ignore = np.zeros(gt_boxes.shape[0])
-                #if len(keep_index) != 0:
-                #    ignore[keep_index-1] = 1
-                #assert len(keep_index)>0
+
                 ignore = np.zeros(gt_boxes.shape[0], dtype=np.int)
                 if len(keep_index) != 0:
-                    ignore[keep_index-1] = 1
-                pred_info = np_round(pred_info,1)
-                #print('ignore:', len(ignore), len(np.where(ignore==1)[0]))
-                #pred_sort_idx= np.argsort(pred_info[:,4])
-                #pred_info = pred_info[pred_sort_idx][::-1]
-                #print ('pred_info', pred_info[:20, 4])
-                #exit()
-
+                    ignore[keep_index - 1] = 1
+                pred_info = np_round(pred_info, 1)
 
                 gt_boxes = np_round(gt_boxes)
-                #ignore = np_round(ignore)
-                pred_recall, proposal_list = image_eval(pred_info, gt_boxes, ignore, iou_th, mpp)
-                #print(pred_recall[:10], proposal_list[:10])
-                #print('1 stage', pred_recall, proposal_list)
-                #print(pred_info.shape, pred_recall.shape)
+                pred_recall, proposal_list = image_eval(
+                    pred_info, gt_boxes, ignore, iou_th, mpp)
 
-                _img_pr_info, fp = img_pr_info(thresh_num, pred_info, proposal_list, pred_recall)
-                #for f in range(pred_info.shape[0]):
-                #    _score = pred_info[f,4]
-                #    if _score<0.929:
-                #        break
-                #    high_score_count+=1
-                #    if fp[f]==1:
-                #        w = pred_info[f, 2]
-                #        h = pred_info[f, 3]
-                #        print('fp:', event_name, img_name, _score, w, h)
-                #        high_score_fp_count+=1
+                _img_pr_info, fp = img_pr_info(thresh_num, pred_info,
+                                               proposal_list, pred_recall)
+
                 pr_curve += _img_pr_info
-        #print ('pr_curve', pr_curve, count_face)
         pr_curve = dataset_pr_info(thresh_num, pr_curve, count_face)
-        #print(pr_curve.shape)
-
         propose = pr_curve[:, 0]
         recall = pr_curve[:, 1]
-        #for f in range(thresh_num):
-        #    print('R-P:', recall[f], propose[f])
         for srecall in np.arange(0.1, 1.0001, 0.1):
-            rindex = len(np.where(recall<=srecall)[0])-1
-            rthresh = 1.0 - float(rindex)/thresh_num
-            print('Recall-Precision-Thresh:', recall[rindex], propose[rindex], rthresh)
+            rindex = len(np.where(recall <= srecall)[0]) - 1
+            rthresh = 1.0 - float(rindex) / thresh_num
+            print('Recall-Precision-Thresh:', recall[rindex], propose[rindex],
+                  rthresh)
 
         ap = voc_ap(recall, propose)
         aps[setting_id] = ap
         tb = datetime.datetime.now()
-        #print('high score count:', high_score_count)
-        #print('high score fp count:', high_score_fp_count)
-        print('%s cost %.4f seconds, ap: %.5f'%(settings[setting_id], (tb-ta).total_seconds(), ap))
+        print('%s cost %.4f seconds, ap: %.5f' %
+              (settings[setting_id], (tb - ta).total_seconds(), ap))
 
     return aps
 
+
 def get_widerface_gts(gt_path):
-    facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list = get_gt_boxes(gt_path)
+    facebox_list, event_list, file_list, hard_gt_list, \
+        medium_gt_list, easy_gt_list = get_gt_boxes(gt_path)
     event_num = len(event_list)
 
-    settings = ['easy', 'medium', 'hard']
+    # settings = ['easy', 'medium', 'hard']
     setting_gts = [easy_gt_list, medium_gt_list, hard_gt_list]
     all_results = []
     for setting_id in range(3):
         results = {}
         gt_list = setting_gts[setting_id]
         count_face = 0
-        # [hard, medium, easy]
-        #pbar = tqdm.tqdm(range(event_num))
-        #for i in pbar:
         for i in range(event_num):
-            #pbar.set_description('Processing {}'.format(settings[setting_id]))
             event_name = str(event_list[i][0][0])
             img_list = file_list[i][0]
             sub_gt_list = gt_list[i][0]
@@ -440,24 +369,24 @@ def get_widerface_gts(gt_path):
             for j in range(len(img_list)):
 
                 gt_boxes = gt_bbx_list[j][0].astype('float').copy()
-                gt_boxes[:,2] += gt_boxes[:,0]
-                gt_boxes[:,3] += gt_boxes[:,1]
+                gt_boxes[:, 2] += gt_boxes[:, 0]
+                gt_boxes[:, 3] += gt_boxes[:, 1]
                 keep_index = sub_gt_list[j][0].copy()
-                #print ('keep_index', keep_index.shape)
                 count_face += len(keep_index)
-                
 
                 if len(gt_boxes) == 0:
-                    results[event_name][str(img_list[j][0][0])] = np.empty( (0,4) )
+                    results[event_name][str(img_list[j][0][0])] = np.empty(
+                        (0, 4))
                     continue
                 keep_index -= 1
                 keep_index = keep_index.flatten()
-                
-                gt_boxes = np_round(gt_boxes)[keep_index,:]
+
+                gt_boxes = np_round(gt_boxes)[keep_index, :]
 
                 results[event_name][str(img_list[j][0][0])] = gt_boxes
         all_results.append(results)
     return all_results
+
 
 # if __name__ == '__main__':
 
@@ -467,17 +396,3 @@ def get_widerface_gts(gt_path):
 
 #     args = parser.parse_args()
 #     evaluation(args.pred, args.gt)
-
-
-
-
-
-
-
-
-
-
-
-
-
-

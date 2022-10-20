@@ -7,8 +7,9 @@ from .sync_norm_hook import SyncNormHook
 from .sync_random_size_hook import SyncRandomSizeHook
 from .yolox_lrupdater_hook import YOLOXLrUpdaterHook
 from .yolox_mode_switch_hook import YOLOXModeSwitchHook
-from .yunet_text_logger_hook import YuNetTextLoggerHook
 from .yunet_sample_size_statistics_hook import YuNetSampleSizeStatisticsHook
+from .yunet_text_logger_hook import YuNetTextLoggerHook
+
 __all__ = [
     'SyncRandomSizeHook', 'YOLOXModeSwitchHook', 'SyncNormHook',
     'ExpMomentumEMAHook', 'LinearMomentumEMAHook', 'YOLOXLrUpdaterHook',

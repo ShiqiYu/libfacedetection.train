@@ -1,6 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
-import os.path as osp
+import os
 import warnings
 from functools import partial
 
@@ -11,8 +11,6 @@ from mmcv import Config, DictAction
 
 from mmdet.core.export import build_model_from_cfg, preprocess_example_input
 from mmdet.core.export.model_wrappers import ONNXRuntimeDetector
-import os
-import onnxruntime
 
 
 def parse_args():
@@ -95,21 +93,17 @@ def pytorch2onnx(model,
         rescale=False)
 
     output_names = []
-    for t in ["cls", "obj", "bbox"]:
-        output_names.extend([f"{t}_{s}" for s in [8, 16, 32]])
+    for t in ['cls', 'obj', 'bbox']:
+        output_names.extend([f'{t}_{s}' for s in [8, 16, 32]])
 
     if model.bbox_head.use_kps:
-        output_names.extend([f"kps_{s}" for s in [8, 16, 32]]) 
+        output_names.extend([f'kps_{s}' for s in [8, 16, 32]])
 
     # dynamic_axes = None
     dynamic_axes = {out: {0: 'batch', 1: 'dim'} for out in output_names}
 
     input_name = 'input'
-    dynamic_axes[input_name] = {
-        0: 'batch',
-        2: 'height',
-        3: 'width'
-    }
+    dynamic_axes[input_name] = {0: 'batch', 2: 'height', 3: 'width'}
 
     torch.onnx.export(
         model,
@@ -127,13 +121,13 @@ def pytorch2onnx(model,
     model.forward = origin_forward
 
     # get the custom op path
-    ort_custom_op_path = ''
-    try:
-        from mmcv.ops import get_onnxruntime_op_path
-        ort_custom_op_path = get_onnxruntime_op_path()
-    except (ImportError, ModuleNotFoundError):
-        warnings.warn('If input model has custom op from mmcv, \
-            you may have to build mmcv with ONNXRuntime from source.')
+    # ort_custom_op_path = ''
+    # try:
+    #     from mmcv.ops import get_onnxruntime_op_path
+    #     ort_custom_op_path = get_onnxruntime_op_path()
+    # except (ImportError, ModuleNotFoundError):
+    #     warnings.warn('If input model has custom op from mmcv, '
+    #         'you may have to build mmcv with ONNXRuntime from source.')
 
     if do_simplify:
         import onnxsim
@@ -152,7 +146,7 @@ def pytorch2onnx(model,
             # custom_lib=ort_custom_op_path,
             dynamic_input_shape=dynamic_export)
         if check_ok:
-            output_file_sim = output_file.replace(".onnx", "_sim.onnx")
+            output_file_sim = output_file.replace('.onnx', '_sim.onnx')
             onnx.save(model_opt, output_file_sim)
             print(f'Successfully simplified ONNX model: {output_file_sim}')
             os.remove(output_file)
@@ -164,7 +158,8 @@ def pytorch2onnx(model,
     onnx.checker.check_model(net)
 
     if net.ir_version < 4:
-        print("Model with ir_version below 4 requires to include initilizer in graph input")
+        print('Model with ir_version below 4 requires'
+              'to include initilizer in graph input')
         return
 
     inputs = net.graph.input
@@ -178,14 +173,6 @@ def pytorch2onnx(model,
 
     onnx.save(net, output_file)
     print(f'Successfully exported ONNX model: {output_file}')
-
-    # print('Test model ...')
-    # img = torch.randn(input_shape, requires_grad=False)
-    # ort_session = onnxruntime.InferenceSession(output_file)
-    # ort_inputs = {ort_session.get_inputs()[0].name: img.numpy()}
-    # ort_outs = ort_session.run(None, ort_inputs)
-    # torch_outs = model.feature_test(img)
-    # [np.testing.assert_allclose(torch_out.detach().numpy(), ort_out, rtol=1e-03, atol=1e-05) for torch_out, ort_out in zip(torch_outs, ort_outs)]
 
     if verify:
         # wrap onnx model
@@ -257,6 +244,7 @@ def pytorch2onnx(model,
         print('The numerical values are the same between Pytorch and ONNX')
     print('Over!')
 
+
 def parse_normalize_cfg(test_pipeline):
     transforms = None
     for pipeline in test_pipeline:
@@ -303,8 +291,11 @@ if __name__ == '__main__':
         args.input_img = 'demo/demo.jpg'
     normalize_cfg = parse_normalize_cfg(cfg.test_pipeline)
 
-    tag = 'dynamic' if args.dynamic_export else f"{input_shape[-2]}_{input_shape[-1]}"
-    output_path = f'./onnx/wwdet_{os.path.basename(args.config).rstrip(".py")}_{tag}.onnx'
+    tag = 'dynamic' if args.dynamic_export \
+        else f'{input_shape[-2]}_{input_shape[-1]}'
+    output_path = ('./onnx/wwdet_'
+                   f'{os.path.basename(args.config).rstrip(".py")}'
+                   f'_{tag}.onnx')
     args.output_file = output_path
 
     # convert model to onnx file
@@ -320,6 +311,3 @@ if __name__ == '__main__':
         test_img=args.test_img,
         do_simplify=args.simplify,
         dynamic_export=args.dynamic_export)
-
-
-

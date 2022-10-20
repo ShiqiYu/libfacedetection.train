@@ -1,8 +1,10 @@
-from mmcv.runner import HOOKS, Hook
 import os
+
 import cv2
 import numpy as np
-import torch
+from mmcv.runner import HOOKS, Hook
+
+
 @HOOKS.register_module()
 class WWHook(Hook):
 
@@ -12,6 +14,7 @@ class WWHook(Hook):
             print(f'mkdir: {outpath}')
         self.outpath = outpath
         self.action = action
+
     # def before_run(self, runner):
     #     pass
 
@@ -37,7 +40,8 @@ class WWHook(Hook):
             batch_size = imgs.shape[0]
             for i in range(batch_size):
                 img_meta = img_metas[i]
-                mean, std = img_meta['img_norm_cfg']['mean'], img_meta['img_norm_cfg']['std']
+                mean, std = img_meta['img_norm_cfg']['mean'], img_meta[
+                    'img_norm_cfg']['std']
                 img_name = os.path.basename(img_meta['filename'])
                 img = imgs[i].numpy()
                 img = img * std + mean
@@ -48,12 +52,21 @@ class WWHook(Hook):
     # def after_iter(self, runner):
     #     pass
 
+
 def draw_img(img, bboxes, kps):
     bboxes = bboxes.numpy().astype(int)
     kps = kps.numpy().astype(int)
     for i in range(bboxes.shape[0]):
-        cv2.rectangle(img, pt1=(bboxes[i][0], bboxes[i][1]), pt2=(bboxes[i][2], bboxes[i][3]), color=(255, 0, 0))
+        cv2.rectangle(
+            img,
+            pt1=(bboxes[i][0], bboxes[i][1]),
+            pt2=(bboxes[i][2], bboxes[i][3]),
+            color=(255, 0, 0))
         for j in range(5):
             color = (0, 255, 0) if kps[i][j][-1] == 1 else (0, 0, 255)
-            cv2.circle(img, center=(kps[i][j][0], kps[i][j][1]), color=color, radius=1)
+            cv2.circle(
+                img,
+                center=(kps[i][j][0], kps[i][j][1]),
+                color=color,
+                radius=1)
     return img

@@ -6,8 +6,8 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=1500,
     warmup_ratio=0.001,
-    step=[55*lr_mult, 68*lr_mult])
-total_epochs = 80*lr_mult
+    step=[55 * lr_mult, 68 * lr_mult])
+total_epochs = 80 * lr_mult
 checkpoint_config = dict(interval=80)
 log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
@@ -170,7 +170,6 @@ model = dict(
         stacked_convs=2,
         feat_channels=64,
         norm_cfg=dict(type='BN', requires_grad=True),
-        #norm_cfg=dict(type='GN', num_groups=16, requires_grad=True),
         cls_reg_share=True,
         strides_share=False,
         dw_conv=True,

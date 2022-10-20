@@ -1,4 +1,3 @@
-
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optimizer_config = dict(grad_clip=None)
 lr_config = dict(
@@ -12,7 +11,10 @@ lr_config = dict(
 runner = dict(type='EpochBasedRunner', max_epochs=1000)
 
 checkpoint_config = dict(interval=100)
-log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=50,
+    hooks=[dict(type='TextLoggerHook'),
+           dict(type='TensorboardLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
@@ -157,7 +159,8 @@ model = dict(
     type='YuNet',
     backbone=dict(
         type='YuNetBackbone',
-        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64], [64, 64]],
+        stage_channels=[[3, 16, 16], [16, 64], [64, 64], [64, 64], [64, 64],
+                        [64, 64]],
         downsample_idx=[0, 2, 3, 4],
         out_idx=[2, 3, 4, 5]),
     # neck=dict(
@@ -178,7 +181,6 @@ model = dict(
         stacked_convs=0,
         feat_channels=64,
         norm_cfg=dict(type='BN', requires_grad=True),
-        #norm_cfg=dict(type='GN', num_groups=16, requires_grad=True),
         cls_reg_share=True,
         strides_share=False,
         dw_conv=True,
@@ -212,8 +214,7 @@ model = dict(
             nms=dict(type='nms', iou_threshold=0.45),
             max_per_img=-1,
             # rescale=True
-        )
-    ),
+        )),
     train_cfg=dict(
         assigner=dict(type='ATSSAssigner', topk=9),
         allowed_border=-1,
