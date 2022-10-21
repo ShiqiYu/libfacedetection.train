@@ -132,7 +132,11 @@ def preprocess_example_input(input_config):
     """
     input_path = input_config['input_path']
     input_shape = input_config['input_shape']
-    one_img = mmcv.imread(input_path)
+    try:
+        one_img = mmcv.imread(input_path)
+    except FileNotFoundError:
+        one_img = (np.random.rand(640, 640, 3) * 255).astype(np.uint8)
+
     one_img = mmcv.imresize(one_img, input_shape[2:][::-1])
     show_img = one_img.copy()
     if 'normalize_cfg' in input_config.keys():
