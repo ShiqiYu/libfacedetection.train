@@ -10,7 +10,7 @@ def parse_args():
         description='Convert wwfacedet models to libfacedetect dnn data')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
-    parser.add_argument('--output-file', type=str, default='./work_dirs/wwfacedet-data.cpp')
+    parser.add_argument('--output-file', type=str, default='./work_dirs/facedetectcnn-data.cpp')
     parser.add_argument('--no_summary', action='store_true', help="Output the flops and params")
     args = parser.parse_args()
     return args
@@ -79,13 +79,11 @@ class CppConvertor(object):
         if (isfirst3x3x3):
             data["weight_size"] = str(out_channels) + '*32*1*1'
             data["in_channels"] = 32
-            # print(conv.in_channels, conv.out_channels, conv.kernel_size)
         else:
             data["weight_size"] = str(out_channels) + '*' + str(in_channels) + '*' + str(width) + '*' + str(height)
         
         weight_str = ""
         for idx in range(w.size - 1):
-            # weight_str += (format(w[idx], precision) + 'f,')
             weight_str += (data2str_as_precision(w[idx], precision) + ',')
 
         weight_str += data2str_as_precision(w[-1], precision)

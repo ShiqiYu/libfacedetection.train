@@ -70,19 +70,19 @@ We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepi
 Following MMdetection training processing.
 
 ```Shell
-CUDA_VISIBLE_DEVICES=0,1 bash tools/dist_train.sh ./config/yunet/x.py 2
+CUDA_VISIBLE_DEVICES=0,1 bash tools/dist_train.sh ./configs/yunet_n.py 2 12345
 ```
 
 ## Detection
 
 ```Shell
-python tools/detect-image.py ./config/x.py ./work_dirs/x/latest.pth ./image.jpg
+python tools/detect_image.py ./configs/yunet_n.py ./weights/yunet_n.pth ./image.jpg
 ```
 
 ## Evaluation on WIDER Face
 
 ```shell
-python tools/test_widerface.py ./config/x.py ./work_dirs/x/latest.pth --mode 2
+python tools/test_widerface.py ./configs/yunet_n.py ./weights/yunet_n.pth --mode 2
 ```
 
 Performance on WIDER Face (Val): confidence_threshold=0.02, nms_threshold=0.45, in origin size:
@@ -96,7 +96,7 @@ AP_easy=0.899, AP_medium=0.883, AP_hard=0.792
 The following bash code can export a CPP file for project [libfacedetection](https://github.com/ShiqiYu/libfacedetection)
 
 ```Shell
-python tools/export2cpp.py ./config/x.py ./work_dirs/x/latest.pth
+python tools/yunet2cpp.py ./configs/yunet_n.py ./weights/yunet_n.pth
 ```
 
 ## Export to onnx model
@@ -104,7 +104,7 @@ python tools/export2cpp.py ./config/x.py ./work_dirs/x/latest.pth
 Export to onnx model for [libfacedetection/example/opencv_dnn](https://github.com/ShiqiYu/libfacedetection/tree/master/example/opencv_dnn).
 
 ```shell
-python tools/wwdet2onnx.py ./config/x.py ./work_dirs/x/latest.pth
+python tools/yunet2onnx.py ./configs/yunet_n.py ./weights/yunet_n.pth
 ```
 
 ## Compare ONNX model with other works
@@ -112,12 +112,12 @@ python tools/wwdet2onnx.py ./config/x.py ./work_dirs/x/latest.pth
 Inference on exported ONNX models using ONNXRuntime:
 
 ```shell
-python tools/compare_inference.py ./onnx/wwdet.onnx --mode AUTO --eval --score_thresh 0.02 --nms_thresh 0.45
+python tools/compare_inference.py ./onnx/yunet_n.onnx --mode AUTO --eval --score_thresh 0.02 --nms_thresh 0.45
 ```
 
 Some similar approaches(e.g. SCRFD, Yolo5face, retinaface) to inference are also supported.
 
-With Intel i7-12700K and `input_size = origin size, score_thresh = 0.3, nms_thresh = 0.45`, some results are list as follow:
+With Intel i7-12700K and `input_size = origin size, score_thresh = 0.02, nms_thresh = 0.45`, some results are list as follow:
 
 | Model                   | AP_easy | AP_medium | AP_hard | #Params | Params Ratio | MFlops | Forward (ms) |
 | ----------------------- | ------- | --------- | ------- | ------- | ------------ | ------ | ------------ |
