@@ -119,7 +119,7 @@ mmdet/.mim
 work_dirs/
 
 # Pytorch
-*.pth
+# *.pth
 *.py~
 *.sh~
 
