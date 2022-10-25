@@ -109,7 +109,7 @@ model = dict(
                         [64, 64]],
         downsample_idx=[0, 2, 3, 4],
         out_idx=[3, 4, 5]),
-    neck=dict(type='WWHead_TFPN', in_channels=[64, 64, 64], out_idx=[0, 1, 2]),
+    neck=dict(type='TFPN', in_channels=[64, 64, 64], out_idx=[0, 1, 2]),
     bbox_head=dict(
         type='YuNet_Head',
         num_classes=1,

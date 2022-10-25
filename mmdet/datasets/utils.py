@@ -8,7 +8,6 @@ from mmcv.runner.hooks import HOOKS, Hook
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import (LoadAnnotations, LoadImageFromFile,
                                       LoadPanopticAnnotations)
-from mmdet.models.dense_heads import GARPNHead, RPNHead
 
 
 def replace_ImageToTensor(pipelines):
@@ -138,8 +137,8 @@ class NumClassCheckHook(Hook):
                  f'Add comma if number of classes is 1 as '
                  f'CLASSES = ({dataset.CLASSES},)')
             for name, module in model.named_modules():
-                if hasattr(module, 'num_classes') and not isinstance(
-                        module, (RPNHead, VGG, FusedSemanticHead, GARPNHead)):
+                if hasattr(module,
+                           'num_classes') and not isinstance(module, (VGG)):
                     assert module.num_classes == len(dataset.CLASSES), \
                         (f'The `num_classes` ({module.num_classes}) in '
                          f'{module.__class__.__name__} of '

@@ -331,7 +331,7 @@ class Detector:
         pass
 
 
-class WWDET(Detector):
+class YUNET(Detector):
 
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:
         super().__init__(model_file, nms_thresh)
@@ -575,147 +575,6 @@ class SCRFD(Detector):
 
         self.time_engine.toc('postprocess')
         return det, kpss
-
-
-class YUNET(Detector):
-
-    def __init__(self, model_file=None, nms_thresh=0.5) -> None:
-        super().__init__(model_file, nms_thresh)
-        self.taskname = 'yunet'
-        self.priors_cache = {}
-
-    def anchor_fn(self, shape):
-        min_sizes_cfg = [[10, 16, 24], [32, 48], [64, 96], [128, 192, 256]]
-        steps = [8, 16, 32, 64]
-        ratio = [1.]
-        clip = False
-
-        feature_map_2th = [
-            int(int((shape[0] + 1) / 2) / 2),
-            int(int((shape[1] + 1) / 2) / 2)
-        ]
-        feature_map_3th = [
-            int(feature_map_2th[0] / 2),
-            int(feature_map_2th[1] / 2)
-        ]
-        feature_map_4th = [
-            int(feature_map_3th[0] / 2),
-            int(feature_map_3th[1] / 2)
-        ]
-        feature_map_5th = [
-            int(feature_map_4th[0] / 2),
-            int(feature_map_4th[1] / 2)
-        ]
-        feature_map_6th = [
-            int(feature_map_5th[0] / 2),
-            int(feature_map_5th[1] / 2)
-        ]
-
-        feature_maps = [
-            feature_map_3th, feature_map_4th, feature_map_5th, feature_map_6th
-        ]
-        anchors = []
-        for k, f in enumerate(feature_maps):
-            min_sizes = min_sizes_cfg[k]
-            for i, j in product(range(f[0]), range(f[1])):
-                for min_size in min_sizes:
-                    cx = (j + 0.5) * steps[k] / shape[1]
-                    cy = (i + 0.5) * steps[k] / shape[0]
-                    for r in ratio:
-                        s_ky = min_size / shape[0]
-                        s_kx = r * min_size / shape[1]
-                        anchors += [cx, cy, s_kx, s_ky]
-        # back to torch land
-        output = np.array(anchors).reshape(-1, 4)
-        if clip:
-            output.clip(max=1, min=0)
-        return output
-
-    def forward(self, img, score_thresh, priors):
-        self.time_engine.tic('forward_calc')
-        img = np.transpose(img, [2, 0, 1]).astype(np.float32)[np.newaxis,
-                                                              ...].copy()
-        self.time_engine.toc('forward_calc')
-
-        self.time_engine.tic('forward_run')
-        loc, conf, iou = self.session.run(
-            None, {self.session.get_inputs()[0].name: img})
-        self.time_engine.toc('forward_run')
-
-        # self.time_engine.tic('forward_calc')
-        self.time_engine.tic('forward_calc_softmax')
-        conf = softmax(conf.squeeze(0))
-        self.time_engine.toc('forward_calc_softmax')
-
-        self.time_engine.tic('forward_calc_decode')
-        boxes = self.decode(loc.squeeze(0), priors, variances=[0.1, 0.2])
-        self.time_engine.toc('forward_calc_decode')
-
-        self.time_engine.tic('forward_calc_norm')
-        _, _, h, w = img.shape
-        boxes[:, 0::2] *= w
-        boxes[:, 1::2] *= h
-        self.time_engine.toc('forward_calc_norm')
-
-        self.time_engine.tic('forward_calc_score')
-        cls_scores = conf[:, 1]
-        iou_scores = iou.squeeze(0)[:, 0]
-        iou_scores = np.clip(iou_scores, a_min=0., a_max=1.)
-        scores = np.sqrt(cls_scores * iou_scores)
-        self.time_engine.toc('forward_calc_score')
-
-        self.time_engine.tic('forward_calc_mask')
-        score_mask = scores > score_thresh
-        boxes = boxes[score_mask]
-        scores = scores[score_mask]
-        self.time_engine.toc('forward_calc_mask')
-        # self.time_engine.toc('forward_calc')
-        return boxes, scores
-
-    def detect(self, img, score_thresh=0.5, mode='ORIGIN'):
-        self.time_engine.tic('preprocess')
-        det_img, det_scale = resize_img(img, mode)
-        if self.priors_cache.get(det_img.shape[:2], None) is None:
-            priors = self.anchor_fn(det_img.shape[:2])
-            self.priors_cache[det_img.shape[:2]] = priors
-        else:
-            priors = self.priors_cache[det_img.shape[:2]]
-        self.time_engine.toc('preprocess')
-
-        bboxes, scores = self.forward(det_img, score_thresh, priors)
-
-        self.time_engine.tic('postprocess')
-        bboxes /= det_scale
-        pre_det = np.hstack((bboxes[:, :4], scores[:, None]))
-        keep = nms(pre_det, self.nms_thresh)
-
-        kpss = bboxes[keep, 4:]
-        bboxes = pre_det[keep, :]
-        self.time_engine.toc('postprocess')
-        return bboxes, kpss
-
-    def decode(self, loc, priors, variances):
-        """Decode locations from predictions using priors to undo the encoding
-        we did for offset regression at train time."""
-        boxes = loc.copy()
-        boxes[:,
-              0:2] = priors[:,
-                            0:2] + boxes[:, 0:2] * variances[0] * priors[:,
-                                                                         2:4]
-        boxes[:, 2:4] = priors[:, 2:4] * np.exp(boxes[:, 2:4] * variances[1])
-
-        # (cx, cy, w, h) -> (x, y, w, h)
-        boxes[:, 0:2] -= boxes[:, 2:4] / 2
-
-        # xywh -> xyXY
-        boxes[:, 2:4] += boxes[:, 0:2]
-        # landmarks
-        if loc.shape[-1] > 4:
-            boxes[:, 4::2] = priors[:, None, 0] + boxes[:, 4::2] * variances[
-                0] * priors[:, None, 2]
-            boxes[:, 5::2] = priors[:, None, 1] + boxes[:, 5::2] * variances[
-                0] * priors[:, None, 3]
-        return boxes
 
 
 class YOLO5FACE(Detector):
@@ -996,9 +855,6 @@ if __name__ == '__main__':
     elif os.path.basename(model_file).lower().startswith('retinaface'):
         prefix = 'retinaface'
         detector = RETINAFACE(model_file, nms_thresh=args.nms_thresh)
-    elif os.path.basename(model_file).lower().startswith('wwdet'):
-        prefix = 'wwdet'
-        detector = WWDET(model_file, nms_thresh=args.nms_thresh)
     else:
         raise ValueError('Unknown detector!')
 
