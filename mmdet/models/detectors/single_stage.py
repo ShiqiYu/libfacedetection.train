@@ -111,7 +111,6 @@ class SingleStageDetector(BaseDetector):
         """
         x = self.extract_feat(img)
         outs = self.bbox_head(x)
-        #print(len(outs))
         if torch.onnx.is_in_onnx_export():
             print('single_stage.py in-onnx-export')
             print(outs.__class__)
@@ -120,7 +119,6 @@ class SingleStageDetector(BaseDetector):
                 print(c.shape)
             for c in bbox_pred:
                 print(c.shape)
-            #print(outs[0].shape, outs[1].shape)
             return outs
         bbox_list = self.bbox_head.get_bboxes(
             *outs, img_metas, rescale=rescale)
