@@ -1,0 +1,10 @@
+cython
+numpy
+onnxruntime
+onnx
+scipy
+tqdm
+terminaltables
+mmpycocotools
+future
+tensorboard
