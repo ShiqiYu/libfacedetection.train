@@ -4,7 +4,9 @@
 
 It is the training program for [libfacedetection](https://github.com/ShiqiYu/libfacedetection). The source code is based on [MMDetection](https://github.com/open-mmlab/mmdetection). Some data processing functions from [SCRFD](https://github.com/deepinsight/insightface/tree/master/detection/scrfd/mmdet) modifications.
 
-Visualization of our network architecture: [\[netron\]](https://netron.app/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/tasks/task1/onnx/YuFaceDetectNet.onnx).
+Visualization of our network architecture: [\[netron\]](https://netron.app/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/onnx/yunet_n_320_320.onnx).
+
+_**NOTICE**: This version of YuNet is newer than the one in opencv_zoo. We will update the one in the opencv_zoo to keep in sync. Stay tune for the update!_
 
 ### Contents
 
@@ -31,8 +33,8 @@ Visualization of our network architecture: [\[netron\]](https://netron.app/?url=
    ```
 3. Clone this repository. We will call the cloned directory as `$TRAIN_ROOT`.
    ```Shell
-   git clone https://github.com/Wwupup/wwfacedet
-   cd wwfacedet
+   git clone https://github.com/ShiqiYu/libfacedetection.train.git
+   cd libfacedetection.train
    python setup.py develop
    ```
 4. Install dependencies.
@@ -61,9 +63,8 @@ _Note: Codes are based on Python 3+._
              └── labelv2.txt
    ```
 
-<!-- _NOTE: \
-We relabled the WIDER Face train set using [RetinaFace](https://github.com/deepinsight/insightface/tree/master/detection/RetinaFace). New labels are in
-`$TRAIN_ROOT/data/widerface/trainset.json`, which is the COCO_format annotations file used in DALI dataloader._ -->
+_NOTE: \
+`labelv2` can be downloaded from https://share.weiyun.com/lRipUkSB password: a66i3i._
 
 ## Training
 
@@ -119,13 +120,14 @@ Some similar approaches(e.g. SCRFD, Yolo5face, retinaface) to inference are also
 
 With Intel i7-12700K and `input_size = origin size, score_thresh = 0.02, nms_thresh = 0.45`, some results are list as follow:
 
-| Model                   | AP_easy | AP_medium | AP_hard | #Params | Params Ratio | MFlops | Forward (ms) |
-| ----------------------- | ------- | --------- | ------- | ------- | ------------ | ------ | ------------ |
-| SCRFD0.5(ICLR2022)      | 0.879   | 0.863     | 0.759   | 631410  | 7.43x        | 184    | 22.3         |
-| Retinaface0.5(CVPR2020) | 0.899   | 0.866     | 0.660   | 426608  | 5.02X        | 245    | 13.9         |
-| YuNet(Ours)             | 0.885   | 0.877     | 0.762   | 85006   | 1.0x         | 136    | 10.6         |
+| Model                   | AP_easy | AP_medium | AP_hard | #Params | Params Ratio | MFlops (320x320) | FPS(320x320) |
+| ----------------------- | ------- | --------- | ------- | ------- | ------------ | ---------------- | ------------ |
+| SCRFD0.5(ICLR2022)      | 0.892   | 0.885     | 0.819   | 631,410 |     8.32x    |      184         |     284      |
+| Retinaface0.5(CVPR2020) | 0.907   | 0.883     | 0.742   | 426,608 |     5.62X    |      245         |     235      |
+| YuNet_n(Ours)           | 0.892   | 0.883     | 0.811   | 75,856  |     1.00x    |      149         |     456      |
+| YuNet_s(Ours)           | 0.887   | 0.871     | 0.768   | 54,608  |     0.72x    |      96          |     537      |
 
-The compared ONNX model is available in https://share.weiyun.com/nEsVgJ2v Password：gydjjs
+The compared models can be downloaded from https://share.weiyun.com/nEsVgJ2v Password：gydjjs
 
 ## Citation
 
