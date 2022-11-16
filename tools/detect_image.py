@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import torch
 from mmcv import Config
+from mmcv.runner import load_checkpoint
 
 from mmdet.models import build_detector
 
@@ -15,8 +16,10 @@ def parse_args():
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('image', help='input image')
     parser.add_argument(
-        '--thr', type=float, default=-1., help='score threshold')
-    parser.add_argument('--out', type=str, default='./result.jpg')
+        '--score_thresh', type=float, default=0.5, help='score threshold')
+    parser.add_argument(
+        '--nms_thresh', type=float, default=0.45, help='nms threshold')
+    parser.add_argument('--out', type=str, default='./work_dirs/result.jpg')
     args = parser.parse_args()
     return args
 
@@ -49,16 +52,29 @@ def main():
         for ds_cfg in cfg.data.test:
             ds_cfg.test_mode = True
 
+    cfg.model.test_cfg.score_thr = args.score_thresh
+    cfg.model.test_cfg.nms.iou_threshold = args.nms_thresh
+
     model = build_detector(cfg.model, train_cfg=None, test_cfg=None)
+    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+    if 'CLASSES' in checkpoint['meta']:
+        model.CLASSES = checkpoint['meta']['CLASSES']
+    else:
+        model.CLASSES = None
     model.eval()
 
     image = cv2.imread(args.image)
-
-    image_tensor = torch.from_numpy(image).float()
+    det_img, det_scale = resize_img(image, 'AUTO')
+    image_tensor = torch.from_numpy(det_img).float()
     image_tensor = image_tensor.permute(2, 0, 1).unsqueeze(0)
-
+    img_metas = [{
+        'img_shape': det_img.shape,
+        'ori_shape': image.shape,
+        'pad_shape': det_img.shape,
+        'scale_factor': [det_scale for _ in range(4)]
+    }]
     with torch.no_grad():
-        result = model.simple_test(image_tensor, None)
+        result = model.simple_test(image_tensor, img_metas, rescale=True)
     assert len(result) == 1
     result = result[0][0]
     draw(image, result, None, args.out, True)
@@ -78,6 +94,42 @@ def draw(img, bboxes, kpss, out_path, with_kps=True):
 
     print('output:', out_path)
     cv2.imwrite(out_path, img)
+
+
+def resize_img(img, mode):
+    if mode == 'ORIGIN':
+        det_img, det_scale = img, 1.
+    elif mode == 'AUTO':
+        assign_h = ((img.shape[0] - 1) & (-32)) + 32
+        assign_w = ((img.shape[1] - 1) & (-32)) + 32
+        det_img = np.zeros((assign_h, assign_w, 3), dtype=np.uint8)
+        det_img[:img.shape[0], :img.shape[1], :] = img
+        det_scale = 1.
+    else:
+        if mode == 'VGA':
+            input_size = (640, 480)
+        else:
+            input_size = list(map(int, mode.split(',')))
+        assert len(input_size) == 2
+        x, y = max(input_size), min(input_size)
+        if img.shape[1] > img.shape[0]:
+            input_size = (x, y)
+        else:
+            input_size = (y, x)
+        im_ratio = float(img.shape[0]) / img.shape[1]
+        model_ratio = float(input_size[1]) / input_size[0]
+        if im_ratio > model_ratio:
+            new_height = input_size[1]
+            new_width = int(new_height / im_ratio)
+        else:
+            new_width = input_size[0]
+            new_height = int(new_width * im_ratio)
+        det_scale = float(new_height) / img.shape[0]
+        resized_img = cv2.resize(img, (new_width, new_height))
+        det_img = np.zeros((input_size[1], input_size[0], 3), dtype=np.uint8)
+        det_img[:new_height, :new_width, :] = resized_img
+
+    return det_img, det_scale
 
 
 if __name__ == '__main__':
