@@ -274,7 +274,7 @@ if __name__ == '__main__':
         cfg.merge_from_dict(args.cfg_options)
 
     if args.shape is None:
-        img_scale = cfg.test_pipeline[1]['img_scale']
+        img_scale = cfg.data.test.pipeline[1]['img_scale']
         input_shape = (1, 3, img_scale[1], img_scale[0])
     elif len(args.shape) == 1:
         input_shape = (1, 3, args.shape[0], args.shape[0])
@@ -289,13 +289,15 @@ if __name__ == '__main__':
 
     if not args.input_img:
         args.input_img = 'demo/demo.jpg'
-    normalize_cfg = parse_normalize_cfg(cfg.test_pipeline)
+    normalize_cfg = parse_normalize_cfg(cfg.data.test.pipeline)
 
     tag = 'dynamic' if args.dynamic_export \
         else f'{input_shape[-2]}_{input_shape[-1]}'
     output_path = ('./onnx/wwdet_'
                    f'{os.path.basename(args.config).rstrip(".py")}'
                    f'_{tag}.onnx')
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.mkdir(os.path.dirname(output_path))
     args.output_file = output_path
 
     # convert model to onnx file
