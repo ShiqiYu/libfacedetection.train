@@ -335,7 +335,7 @@ class YUNET(Detector):
 
     def __init__(self, model_file=None, nms_thresh=0.5) -> None:
         super().__init__(model_file, nms_thresh)
-        self.taskname = 'wwdet'
+        self.taskname = 'yunet'
         self.priors_cache = []
         self.strides = [8, 16, 32]
         self.NK = 5

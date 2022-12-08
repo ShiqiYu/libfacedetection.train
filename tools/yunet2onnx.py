@@ -10,8 +10,6 @@ import torch
 from mmcv import Config, DictAction
 
 from mmdet.core.export import build_model_from_cfg, preprocess_example_input
-from mmdet.core.export.model_wrappers import ONNXRuntimeDetector
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -19,11 +17,7 @@ def parse_args():
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--input-img', type=str, help='Images for input')
-    parser.add_argument(
-        '--show',
-        action='store_true',
-        help='Show onnx graph and detection outputs')
-    parser.add_argument('--output-file', type=str, default='tmp.onnx')
+    parser.add_argument('--output-file', type=str, default=None)
     parser.add_argument('--opset-version', type=int, default=11)
     parser.add_argument(
         '--test-img', type=str, default=None, help='Images for test')
@@ -175,72 +169,46 @@ def pytorch2onnx(model,
     print(f'Successfully exported ONNX model: {output_file}')
 
     if verify:
+        import onnxruntime
         # wrap onnx model
-        onnx_model = ONNXRuntimeDetector(output_file, model.CLASSES, 0)
-        if dynamic_export:
-            # scale up to test dynamic shape
-            h, w = [int((_ * 1.5) // 32 * 32) for _ in input_shape[2:]]
-            h, w = min(1344, h), min(1344, w)
-            input_config['input_shape'] = (1, 3, h, w)
-
         if test_img is None:
             input_config['input_path'] = input_img
 
         # prepare input once again
         one_img, one_meta = preprocess_example_input(input_config)
-        img_list, img_meta_list = [one_img], [[one_meta]]
 
-        # get pytorch output
+        # get pytorch output, specific for yunet
         with torch.no_grad():
-            pytorch_results = model(
-                img_list,
-                img_metas=img_meta_list,
-                return_loss=False,
-                rescale=True)[0]
+            cls_preds, bbox_preds, obj_preds, kps_preds = model.feature_test(one_img)
+            flatten_cls_preds = [
+                cls_pred.permute(0, 2, 3, 1).view(1, -1, 1).sigmoid().numpy()
+                for cls_pred in cls_preds
+            ]
+            flatten_bbox_preds = [
+                bbox_pred.permute(0, 2, 3, 1).view(1, -1, 4).numpy()
+                for bbox_pred in bbox_preds
+            ]
+            flatten_kps_preds = [
+                kps_pred.permute(0, 2, 3, 1).view(1, -1, 10).numpy()
+                for kps_pred in kps_preds
+            ]
+            flatten_objectness = [
+                objectness.permute(0, 2, 3, 1).view(1, -1, 1).sigmoid().numpy()
+                for objectness in obj_preds
+            ]
+        pytorch_results = flatten_cls_preds + flatten_objectness + flatten_bbox_preds + flatten_kps_preds
 
-        img_list = [_.cuda().contiguous() for _ in img_list]
-        if dynamic_export:
-            img_list = img_list + [_.flip(-1).contiguous() for _ in img_list]
-            img_meta_list = img_meta_list * 2
         # get onnx output
-        onnx_results = onnx_model(
-            img_list, img_metas=img_meta_list, return_loss=False)[0]
-        # visualize predictions
-        score_thr = 0.3
-        if show:
-            out_file_ort, out_file_pt = None, None
-        else:
-            out_file_ort, out_file_pt = 'show-ort.png', 'show-pt.png'
+        session = onnxruntime.InferenceSession(output_file, None)
+        onnx_results = session.run(None, {session.get_inputs()[0].name: one_img.detach().numpy()})
 
-        show_img = one_meta['show_img']
-        model.show_result(
-            show_img,
-            pytorch_results,
-            score_thr=score_thr,
-            show=True,
-            win_name='PyTorch',
-            out_file=out_file_pt)
-        onnx_model.show_result(
-            show_img,
-            onnx_results,
-            score_thr=score_thr,
-            show=True,
-            win_name='ONNXRuntime',
-            out_file=out_file_ort)
-
-        # compare a part of result
-        if model.with_mask:
-            compare_pairs = list(zip(onnx_results, pytorch_results))
-        else:
-            compare_pairs = [(onnx_results, pytorch_results)]
         err_msg = 'The numerical values are different between Pytorch' + \
                   ' and ONNX, but it does not necessarily mean the' + \
                   ' exported ONNX model is problematic.'
         # check the numerical value
-        for onnx_res, pytorch_res in compare_pairs:
-            for o_res, p_res in zip(onnx_res, pytorch_res):
-                np.testing.assert_allclose(
-                    o_res, p_res, rtol=1e-03, atol=1e-05, err_msg=err_msg)
+        for o_res, p_res in zip(onnx_results, pytorch_results):
+            np.testing.assert_allclose(
+                o_res, p_res, rtol=1e-02, atol=1e-05, err_msg=err_msg)
         print('The numerical values are the same between Pytorch and ONNX')
     print('Over!')
 
@@ -293,12 +261,14 @@ if __name__ == '__main__':
 
     tag = 'dynamic' if args.dynamic_export \
         else f'{input_shape[-2]}_{input_shape[-1]}'
-    output_path = ('./onnx/wwdet_'
-                   f'{os.path.basename(args.config).rstrip(".py")}'
-                   f'_{tag}.onnx')
-    if not os.path.exists(os.path.dirname(output_path)):
-        os.mkdir(os.path.dirname(output_path))
-    args.output_file = output_path
+
+    if args.output_file is None:
+        output_path = ('./onnx/'
+                    f'{os.path.basename(args.config).rstrip(".py")}'
+                    f'_{tag}.onnx')
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.mkdir(os.path.dirname(output_path))
+        args.output_file = output_path
 
     # convert model to onnx file
     pytorch2onnx(
@@ -307,7 +277,7 @@ if __name__ == '__main__':
         input_shape,
         normalize_cfg,
         opset_version=args.opset_version,
-        show=args.show,
+        show=False,
         output_file=args.output_file,
         verify=args.verify,
         test_img=args.test_img,
