@@ -93,11 +93,11 @@ def pytorch2onnx(model,
     if model.bbox_head.use_kps:
         output_names.extend([f'kps_{s}' for s in [8, 16, 32]])
 
-    # dynamic_axes = None
-    dynamic_axes = {out: {0: 'batch', 1: 'dim'} for out in output_names}
-
     input_name = 'input'
-    dynamic_axes[input_name] = {0: 'batch', 2: 'height', 3: 'width'}
+    dynamic_axes = None
+    if dynamic_export:
+        dynamic_axes = {out: {0: 'batch', 1: 'dim'} for out in output_names}
+        dynamic_axes[input_name] = {0: 'batch', 2: 'height', 3: 'width'}
 
     torch.onnx.export(
         model,
@@ -125,7 +125,6 @@ def pytorch2onnx(model,
 
     if do_simplify:
         import onnxsim
-
         from mmdet import digit_version
 
         min_required_version = '0.3.0'
@@ -137,14 +136,13 @@ def pytorch2onnx(model,
         model_opt, check_ok = onnxsim.simplify(
             output_file,
             input_data=input_dic,
-            # custom_lib=ort_custom_op_path,
-            dynamic_input_shape=dynamic_export)
+        )
         if check_ok:
             output_file_sim = output_file.replace('.onnx', '_sim.onnx')
             onnx.save(model_opt, output_file_sim)
-            print(f'Successfully simplified ONNX model: {output_file_sim}')
-            os.remove(output_file)
-            output_file = output_file_sim
+            os.remove(output_file)            
+            os.rename(output_file_sim, output_file)
+            print(f'Successfully simplified ONNX model: {output_file}')
         else:
             warnings.warn('Failed to simplify ONNX model.')
 

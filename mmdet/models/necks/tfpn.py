@@ -37,7 +37,7 @@ class TFPN(nn.Module):
         for i in range(num_feats - 1, 0, -1):
             feats[i] = self.lateral_convs[i](feats[i])
             feats[i - 1] = feats[i - 1] + F.interpolate(
-                feats[i], size=feats[i - 1].shape[-2:], mode='nearest')
+                feats[i], scale_factor=2., mode='nearest')
 
         feats[0] = self.lateral_convs[0](feats[0])
 

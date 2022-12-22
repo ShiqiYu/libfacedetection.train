@@ -225,22 +225,21 @@ class YuNet_Head(BaseDenseHead, BBoxTestMixin):
             ]
 
         if torch.onnx.is_in_onnx_export():
-            batch_size = cls_preds[0].shape[0]
             cls = [
-                f.permute(0, 2, 3, 1).view(batch_size, -1,
+                f.permute(0, 2, 3, 1).view(f.shape[0], -1,
                                            self.num_classes).sigmoid()
                 for f in cls_preds
             ]
             obj = [
-                f.permute(0, 2, 3, 1).view(batch_size, -1, 1).sigmoid()
+                f.permute(0, 2, 3, 1).view(f.shape[0], -1, 1).sigmoid()
                 for f in obj_preds
             ]
             bbox = [
-                f.permute(0, 2, 3, 1).view(batch_size, -1, 4)
+                f.permute(0, 2, 3, 1).view(f.shape[0], -1, 4)
                 for f in bbox_preds
             ]
             kps = [
-                f.permute(0, 2, 3, 1).view(batch_size, -1, self.NK * 2)
+                f.permute(0, 2, 3, 1).view(f.shape[0], -1, self.NK * 2)
                 for f in kps_preds
             ]
             return (cls, obj, bbox, kps)
