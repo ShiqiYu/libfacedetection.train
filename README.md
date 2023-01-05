@@ -64,7 +64,7 @@ _Note: Codes are based on Python 3+._
    ```
 
 _NOTE: \
-`labelv2` can be downloaded from https://share.weiyun.com/lRipUkSB password: a66i3i._
+`labelv2` can be downloaded from [Google Drive](https://drive.google.com/file/d/1DX9u07UbXDVJ91RFsLxR7eyUvs6_0crm/view?usp=sharing)._
 
 ## Training
 
@@ -89,7 +89,7 @@ python tools/test_widerface.py ./configs/yunet_n.py ./weights/yunet_n.pth --mode
 Performance on WIDER Face (Val): confidence_threshold=0.02, nms_threshold=0.45, in origin size:
 
 ```
-AP_easy=0.899, AP_medium=0.883, AP_hard=0.792
+AP_easy=0.892, AP_medium=0.883, AP_hard=0.811
 ```
 
 ## Export CPP source code
@@ -127,7 +127,7 @@ With Intel i7-12700K and `input_size = origin size, score_thresh = 0.02, nms_thr
 | YuNet_n(Ours)           | 0.892   | 0.883     | 0.811   | 75,856  |     1.00x    |      149         |     456      |
 | YuNet_s(Ours)           | 0.887   | 0.871     | 0.768   | 54,608  |     0.72x    |      96          |     537      |
 
-The compared models can be downloaded from https://share.weiyun.com/nEsVgJ2v Password：gydjjs
+The compared models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1PmnX0LPkQxGali2dvRqABr0VnE8OJ7FA?usp=sharing).
 
 ## Citation
 
