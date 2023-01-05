@@ -104,8 +104,6 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-data/
-data
 .vscode
 .idea
 .DS_Store
@@ -127,4 +125,8 @@ work_dirs/
 
 /wout
 
-# /onnx
+/data/*
+!/data/widerface/
+
+/data/widerface/*
+!/data/widerface/labelv2/
