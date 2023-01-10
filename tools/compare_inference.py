@@ -773,7 +773,7 @@ def onnx_eval(detector,
 
         aps = wider_evaluation(
             pred=results,
-            gt_path=os.path.join(widerface_root, 'ground_truth'),
+            gt_path=os.path.join(widerface_root, 'labelv2', 'val', 'gt'),
             iou_thresh=0.5)
         print('APS:', aps)
 
@@ -832,7 +832,7 @@ def parse_args():
     parser.add_argument(
         '--score_thresh',
         type=float,
-        default=0.3,
+        default=0.02,
         help='tresh to score filter')
 
     args = parser.parse_args()
