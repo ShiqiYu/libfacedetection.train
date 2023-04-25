@@ -38,7 +38,7 @@ data = dict(
             dict(type='LoadAnnotations', with_bbox=True, with_keypoints=True),
             dict(
                 type='RandomSquareCrop',
-                crop_choice=[0.3, 0.45, 0.6, 0.8, 1.0]),
+                crop_choice=[0.5, 0.7, 0.9, 1.1, 1.3, 1.5]),
             dict(type='Resize', img_scale=(640, 640), keep_ratio=False),
             dict(type='RandomFlip', flip_ratio=0.5),
             dict(
