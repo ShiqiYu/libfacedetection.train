@@ -690,8 +690,10 @@ class Pad:
                 max_size = max(results[key].shape[:2])
                 self.size = (max_size, max_size)
             if self.size is not None:
+                pad_r = self.size[0] - results[key].shape[1]
+                pad_b = self.size[1] - results[key].shape[0]
                 padded_img = mmcv.impad(
-                    results[key], shape=self.size, pad_val=pad_val)
+                    results[key], padding=(0, 0, pad_r, pad_b), pad_val=pad_val)
             elif self.size_divisor is not None:
                 padded_img = mmcv.impad_to_multiple(
                     results[key], self.size_divisor, pad_val=pad_val)

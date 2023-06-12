@@ -79,10 +79,10 @@ def main():
     args = parse_args()
     cfg = retrieve_data_cfg(args.config, args.skip_type, args.cfg_options)
 
-    if 'gt_semantic_seg' in cfg.train_pipeline[-1]['keys']:
-        cfg.data.train.pipeline = [
-            p for p in cfg.data.train.pipeline if p['type'] != 'SegRescale'
-        ]
+    # if 'gt_semantic_seg' in cfg.train_pipeline[-1]['keys']:
+    #     cfg.data.train.pipeline = [
+    #         p for p in cfg.data.train.pipeline if p['type'] != 'SegRescale'
+    #     ]
     dataset = build_dataset(cfg.data.train)
 
     progress_bar = mmcv.ProgressBar(len(dataset))

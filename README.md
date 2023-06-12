@@ -6,7 +6,6 @@ It is the training program for [libfacedetection](https://github.com/ShiqiYu/lib
 
 Visualization of our network architecture: [\[netron\]](https://netron.app/?url=https://raw.githubusercontent.com/ShiqiYu/libfacedetection.train/master/onnx/yunet_n_320_320.onnx).
 
-_**NOTICE**: This version of YuNet is newer than the one in opencv_zoo. We will update the one in the opencv_zoo to keep in sync. Stay tune for the update!_
 
 ### Contents
 
@@ -130,6 +129,20 @@ With Intel i7-12700K and `input_size = origin size, score_thresh = 0.02, nms_thr
 The compared models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1PmnX0LPkQxGali2dvRqABr0VnE8OJ7FA?usp=sharing).
 
 ## Citation
+We published a paper for the main idea of this repository:
+
+```
+@article{yunet,
+  title={YuNet: A Tiny Millisecond-level Face Detector},
+  author={Wu, Wei and Peng, Hanyang and Yu, Shiqi},
+  journal={Machine Intelligence Research},
+  pages={1--10},
+  year={2023},
+  doi={10.1007/s11633-023-1423-y},
+  publisher={Springer}
+}
+```
+The paper can be open accessed at https://link.springer.com/article/10.1007/s11633-023-1423-y.
 
 The loss used in training is EIoU, a novel extended IoU. More details can be found in:
 
@@ -142,7 +155,7 @@ The loss used in training is EIoU, a novel extended IoU. More details can be fou
  volume={30},
  pages={5032-5044},
  doi={10.1109/TIP.2021.3077144}
- }
+}
 ```
 
 The paper can be open accessed at https://ieeexplore.ieee.org/document/9429909.
@@ -151,11 +164,15 @@ We also published a paper on face detection to evaluate different methods.
 
 ```
 @article{facedetect-yu,
- author={Yuantao Feng and Shiqi Yu and Hanyang Peng and Yan-ran Li and Jianguo Zhang}
- title={Detect Faces Efficiently: A Survey and Evaluations},
- journal={IEEE Transactions on Biometrics, Behavior, and Identity Science},
- year={2021}
- }
+  author={Feng, Yuantao and Yu, Shiqi and Peng, Hanyang and Li, Yan-Ran and Zhang, Jianguo},
+  journal={IEEE Transactions on Biometrics, Behavior, and Identity Science}, 
+  title={Detect Faces Efficiently: A Survey and Evaluations}, 
+  year={2022},
+  volume={4},
+  number={1},
+  pages={1-18},
+  doi={10.1109/TBIOM.2021.3120412}
+}
 ```
 
 The paper can be open accessed at https://ieeexplore.ieee.org/document/9580485
