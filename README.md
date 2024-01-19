@@ -9,39 +9,59 @@ Visualization of our network architecture: [\[netron\]](https://netron.app/?url=
 
 ### Contents
 
-- [Installation](#installation)
-- [Preparation](#Preparation)
-- [Training](#training)
-- [Detection](#detection)
-- [Evaluation on WIDER Face](#evaluation-on-wider-face)
-- [Export CPP source code](#export-cpp-source-code)
-- [Export to ONNX model](#export-to-onnx-model)
-- [Design your own model](#design-your-own-model)
-- [Citation](#citation)
+- [Training for libfacedetection in PyTorch](#training-for-libfacedetection-in-pytorch)
+    - [Contents](#contents)
+  - [Installation](#installation)
+  - [Preparation](#preparation)
+  - [Training](#training)
+  - [Detection](#detection)
+  - [Evaluation on WIDER Face](#evaluation-on-wider-face)
+  - [Export CPP source code](#export-cpp-source-code)
+  - [Export to onnx model](#export-to-onnx-model)
+  - [Compare ONNX model with other works](#compare-onnx-model-with-other-works)
+  - [Citation](#citation)
 
 ## Installation
 
-1. Install [PyTorch](https://pytorch.org/) >= v1.7.0 following official instruction. e.g.\
-   On GPU platforms (cu102):\\
+1. Create conda environment. e.g.
    ```shell
-   conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=10.2 -c pytorch
+   conda create -n yunet python=3.8
+   conda activate yunet
    ```
-2. Install [MMCV](https://github.com/open-mmlab/mmcv) >= v1.3.17 following official instruction. e.g.\\
+1. Install [PyTorch](https://pytorch.org/) == v1.8.2 (LTS) following official instruction. e.g.\
+   On GPU platforms (cu11.1):
    ```shell
-   pip install mmcv-full==1.3.17 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.7.0/index.html
+   # LINUX:
+   conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch-lts -c nvidia
+   # WINDOWS:
+   conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch-lts -c conda-forge
+   ```
+   On GPU platforms (cu10.2):
+   ```shell
+   conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch-lts
+   ```
+2. Install [MMCV](https://github.com/open-mmlab/mmcv) >= v1.3.17 but  <=1.6.0 following official instruction. e.g.
+   ```shell
+   # cu11.1
+   pip install mmcv-full==1.3.17 -f https://download.openmmlab.com/mmcv/dist/cu111/torch1.8.0/index.html
+   # cu10.2
+   pip install mmcv-full==1.3.17 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.8.0/index.html
    ```
 3. Clone this repository. We will call the cloned directory as `$TRAIN_ROOT`.
    ```Shell
    git clone https://github.com/ShiqiYu/libfacedetection.train.git
    cd libfacedetection.train
-   python setup.py develop
    ```
 4. Install dependencies.
    ```shell
+   python setup.py develop
    pip install -r requirements.txt
    ```
 
-_Note: Codes are based on Python 3+._
+_Note_: 
+   1. Codes are based on Python 3+.
+   2. If meet error "ModuleNotFoundError: No module named 'torch.ao'", you can `Ctrl + click` to origin line and replace `torch.ao` to `torch`
+
 
 ## Preparation
 
