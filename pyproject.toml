@@ -28,7 +28,7 @@ dependencies = [
     "PyYAML==6.0.3",
     "tensorboard==2.20.0",
     "scipy==1.17.1",
-    "onnx==1.21.0",
+    "onnx==1.22.0",
     "onnxruntime==1.25.1",
 ]
 
